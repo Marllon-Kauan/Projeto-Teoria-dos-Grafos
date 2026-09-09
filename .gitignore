@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# PyInstaller / Build
+build/
+dist/
+*.spec
+
+# Banco de Dados SQLite local (opcional)
+*.db
