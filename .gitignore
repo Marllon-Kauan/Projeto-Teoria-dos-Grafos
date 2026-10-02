@@ -3,11 +3,24 @@ __pycache__/
 *.py[cod]
 venv/
 .venv/
+.env
 
 # PyInstaller / Build
 build/
 dist/
 *.spec
 
-# Banco de Dados SQLite local (opcional)
+# Banco de Dados SQLite local e arquivos temporários de transação
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# IDEs e Editores
+.vscode/
+.idea/
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
