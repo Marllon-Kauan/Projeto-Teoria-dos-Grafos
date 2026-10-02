@@ -1,4 +1,4 @@
-#Projeto Teoria dos Grafos
+# Projeto Teoria dos Grafos
 
 Este projeto realiza a alocação automática de horários e salas de aula utilizando teoria dos grafos e um algoritmo guloso. O sistema lê dados de um banco SQLite, constrói um grafo de conflitos entre turmas e aloca os horários e salas evitando sobreposições de disciplinas, professores ou períodos.
 
