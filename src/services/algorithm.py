@@ -115,6 +115,7 @@ def alocar_horarios(grafo, ordem_alocacao):
 
         #Checa se no fim a turma conseguiu todas as aulas que precisa.
         if len(turma.horarios_alocados) < turma.aulas_semanais:
+            turma.horarios_alocados.clear() #Remove os horários parciais salvos
             turmas_com_erro.append(turma) 
 
     #Retorna a lista de turmas problemáticas.

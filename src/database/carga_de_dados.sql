@@ -169,7 +169,7 @@ INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_ho
  
  
 INSERT INTO dis_disciplina (dis_id, dis_nome, dis_codigo, dis_eletiva, dis_cargaHoraria, idper_periodo) VALUES
-(1, 'Mineração de Dados', 'CCMP0078', 1, 60, 9),
+(1, 'Mineração de Dados', 'CCMP0078', 1, 60, NULL),
 (2, 'Aprendizagem de Máquina', 'CCMP0123', 0, 60, 7),
 (3, 'Sistemas de Comunicação', 'CCMP0076', 0, 60, 6),
 (4, 'Algoritmos e Estruturas de Dados', 'CCMP0110', 0, 60, 4),
@@ -207,55 +207,55 @@ INSERT INTO dis_disciplina (dis_id, dis_nome, dis_codigo, dis_eletiva, dis_carga
 (36, 'Construção de Compiladores', 'CCMP0117', 0, 60, 8),
 (37, 'Elementos de Robótica', 'CCMP0125', 0, 60, 8),
 (38, 'Sistemas Embarcados', 'CCMP0124', 0, 60, 8),
-(39, 'Automação Industrial', 'CCMP0127', 0, 60, 9),
-(40, 'Gestão de TIC e Empreendedorismo', 'CCMP0126', 0, 30, 9),
-(41, 'Ambiente de Desenvolvimento de Software', 'CCMP0088', 1, 60, 9),
-(42, 'Aplicações em Engenharia de Software', 'CCMP0089', 1, 60, 9),
-(43, 'Arquitetura Avançada de Computadores', 'CCMP0002', 1, 60, 9),
-(44, 'Automação de Máquinas', 'CCMP0135', 1, 60, 9),
-(45, 'Avaliação de Desempenho', 'CCMP0004', 1, 60, 9),
-(46, 'Computação Natural', 'CCMP0082', 1, 60, 9),
-(47, 'Concorrência', 'CCMP0008', 1, 60, 9),
-(48, 'Engenharia de Software Experimental', 'CCMP0083', 1, 60, 9),
-(49, 'Estática', 'FISC0067', 1, 60, 9),
-(50, 'Gerência de Projeto', 'CCMP0012', 1, 60, 9),
-(51, 'Gerência de Redes de Computadores', 'CCMP0013', 1, 60, 9),
-(52, 'Métodos Formais', 'CCMP0023', 1, 60, 9),
-(53, 'Processamento Digital de Imagem', 'CCMP0026', 1, 60, 9),
-(54, 'Projeto de Banco de Dados', 'CCMP0028', 1, 60, 9),
-(55, 'Projeto de Sistemas Operacionais', 'CCMP0031', 1, 60, 9),
-(56, 'Redes Neurais Artificiais', 'CCMP0087', 1, 60, 9),
-(57, 'Segurança da Informação', 'CCMP0091', 1, 60, 9),
-(58, 'Sistemas de Informação', 'CCMP0036', 1, 60, 9),
-(59, 'Computação Gráfica', 'CCMP0007', 1, 60, 10),
-(60, 'Comunicação Digital', 'ELET0018', 1, 60, 10),
-(61, 'Engenharia de Requisitos', 'CCMP0132', 1, 60, 10),
-(62, 'Formação de Empreendedores', 'ADMT0002', 1, 60, 10),
-(63, 'Integração de Sistemas de Automação', 'CCMP0136', 1, 60, 10),
-(64, 'Interface de Voz', 'CCMP0133', 1, 60, 10),
-(65, 'Laboratório de Redes', 'CCMP0134', 1, 60, 10),
-(66, 'Microcontroladores', 'ELET0056', 1, 60, 10),
-(67, 'Modelagem Analítica', 'CCMP0081', 1, 60, 10),
-(68, 'Modelagem e Simulação', 'CCMP0024', 1, 60, 10),
-(69, 'Paradigmas de Linguagens de Programação', 'CCMP0131', 1, 60, 10),
-(70, 'Projetos com Microcontroladores', 'ELET0118', 1, 60, 10),
-(71, 'Prototipação de Circuitos Integrados', 'ELET0068', 1, 60, 10),
-(72, 'Segurança de Redes de Computadores', 'CCMP0033', 1, 60, 10),
-(73, 'Sistemas Distribuídos', 'CCMP0037', 1, 60, 10),
-(74, 'Sistemas Multiagentes', 'CCMP0092', 1, 60, 10),
-(75, 'Teoria da Informação', 'ELET0105', 1, 60, 10),
-(76, 'Tolerância e Falhas', 'CCMP0098', 1, 60, 10),
-(77, 'Verificação e Validação', 'CCMP0130', 1, 60, 10),
-(78, 'Visão Computacional', 'CCMP0093', 1, 60, 10);
+(39, 'Automação Industrial', 'CCMP0127', 0, 60, NULL),
+(40, 'Gestão de TIC e Empreendedorismo', 'CCMP0126', 0, 30, NULL),
+(41, 'Ambiente de Desenvolvimento de Software', 'CCMP0088', 1, 60, NULL),
+(42, 'Aplicações em Engenharia de Software', 'CCMP0089', 1, 60, NULL),
+(43, 'Arquitetura Avançada de Computadores', 'CCMP0002', 1, 60, NULL),
+(44, 'Automação de Máquinas', 'CCMP0135', 1, 60, NULL),
+(45, 'Avaliação de Desempenho', 'CCMP0004', 1, 60, NULL),
+(46, 'Computação Natural', 'CCMP0082', 1, 60, NULL),
+(47, 'Concorrência', 'CCMP0008', 1, 60, NULL),
+(48, 'Engenharia de Software Experimental', 'CCMP0083', 1, 60, NULL),
+(49, 'Estática', 'FISC0067', 1, 60, NULL),
+(50, 'Gerência de Projeto', 'CCMP0012', 1, 60, NULL),
+(51, 'Gerência de Redes de Computadores', 'CCMP0013', 1, 60, NULL),
+(52, 'Métodos Formais', 'CCMP0023', 1, 60, NULL),
+(53, 'Processamento Digital de Imagem', 'CCMP0026', 1, 60, NULL),
+(54, 'Projeto de Banco de Dados', 'CCMP0028', 1, 60, NULL),
+(55, 'Projeto de Sistemas Operacionais', 'CCMP0031', 1, 60, NULL),
+(56, 'Redes Neurais Artificiais', 'CCMP0087', 1, 60, NULL),
+(57, 'Segurança da Informação', 'CCMP0091', 1, 60, NULL),
+(58, 'Sistemas de Informação', 'CCMP0036', 1, 60, NULL),
+(59, 'Computação Gráfica', 'CCMP0007', 1, 60, NULL),
+(60, 'Comunicação Digital', 'ELET0018', 1, 60, NULL),
+(61, 'Engenharia de Requisitos', 'CCMP0132', 1, 60, NULL),
+(62, 'Formação de Empreendedores', 'ADMT0002', 1, 60, NULL),
+(63, 'Integração de Sistemas de Automação', 'CCMP0136', 1, 60, NULL),
+(64, 'Interface de Voz', 'CCMP0133', 1, 60, NULL),
+(65, 'Laboratório de Redes', 'CCMP0134', 1, 60, NULL),
+(66, 'Microcontroladores', 'ELET0056', 1, 60, NULL),
+(67, 'Modelagem Analítica', 'CCMP0081', 1, 60, NULL),
+(68, 'Modelagem e Simulação', 'CCMP0024', 1, 60, NULL),
+(69, 'Paradigmas de Linguagens de Programação', 'CCMP0131', 1, 60, NULL),
+(70, 'Projetos com Microcontroladores', 'ELET0118', 1, 60, NULL),
+(71, 'Prototipação de Circuitos Integrados', 'ELET0068', 1, 60, NULL),
+(72, 'Segurança de Redes de Computadores', 'CCMP0033', 1, 60, NULL),
+(73, 'Sistemas Distribuídos', 'CCMP0037', 1, 60, NULL),
+(74, 'Sistemas Multiagentes', 'CCMP0092', 1, 60, NULL),
+(75, 'Teoria da Informação', 'ELET0105', 1, 60, NULL),
+(76, 'Tolerância e Falhas', 'CCMP0098', 1, 60, NULL),
+(77, 'Verificação e Validação', 'CCMP0130', 1, 60, NULL),
+(78, 'Visão Computacional', 'CCMP0093', 1, 60, NULL);
  
 INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) VALUES
 (1, 2026101, 1, 1, 2), -- Alexandre - Mineração de Dados 
 (2, 2026102, 2, 2, 2), -- Byron - Aprendizagem de Máquina 
 (3, 2026103, 3, 3, 2), -- Carmelo - Sistemas de Comunicação 
 (4, 2026104, 4, 4, 2), -- Cleyton - Algoritmos e Estruturas de Dados 
-(5, 2026106, 5, 6, 2), -- Cleyton - Projeto de Final de Curso 
-(6, 2026107, 5, 7, 2), -- Daniel - Controle de Processos 
-(7, 2026108, 6, 8, 2); -- Wylliams - Engenharia de Software 
+(5, 2026106, 5, 6, 2), -- Daniel - Controle de Processos 
+(6, 2026107, 5, 7, 2), -- Daniel - Redes de Computadores 2 
+(7, 2026108, 6, 8, 2); -- Wylliams - Engenharia de Software
  
 INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES
 (1, 1, 1, 21), -- Mineração de Dados - Quinta C 
@@ -265,7 +265,6 @@ INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_hora
 (5, 3, 3, 21), -- Sistemas de Comunicação - Quinta C 
 (6, 4, 4, 1), -- Algoritmos e Estruturas de Dados - Segunda A 
 (7, 4, 4, 2), -- Algoritmos e Estruturas de Dados - Segunda B 
-(8, 5, 1, 23), -- Projeto de Final de Curso - Quinta E 
-(9, 6, 2, 21), -- Controle de Processos - Quinta C 
-(10, 7, 3, 22), -- Redes de Computadores 2 - Quinta D 
-(11, 8, 4, 9); -- Engenharia de Software - Terca C 
+(8, 5, 1, 23), -- Controle de Processos - Quinta E 
+(9, 6, 2, 21), -- Redes de Computadores 2 - Quinta C 
+(10, 7, 3, 22); -- Engenharia de Software - Quinta D

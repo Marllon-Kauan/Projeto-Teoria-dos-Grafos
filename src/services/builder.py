@@ -52,7 +52,7 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados):
                 motivos.append("disciplina")
 
             #Se duas turmas fizerem parte do mesmo período, tem conflito.
-            if t1.idper_periodo is not None and t1.idper_periodo == t2.idper_periodo:
+            if (t1.idper_periodo not in [None, "NULL", ""]) and (t1.idper_periodo == t2.idper_periodo):
                 motivos.append("periodo")
 
             #Se houve algum conflito listado
