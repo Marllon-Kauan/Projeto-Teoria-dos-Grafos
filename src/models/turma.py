@@ -17,3 +17,6 @@ class Turma:
         self.idsal_sala = idsal_sala                #ID da sala.
         self.dominio_horarios = set()               #Conjunto de horários em que a turma pode ter aula.
         self.horarios_alocados = []                 #Guarda os horários escolhidos.
+
+    def __str__(self):
+        return f"Código: {self.tur_codigo} | Disciplina: {self.dis_nome} | Prof: {self.pro_nome}"

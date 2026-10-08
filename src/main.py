@@ -4,6 +4,7 @@ Executa o sistema.
 
 import sqlite3
 import os
+from database.connection import buscar_horarios
 from services.builder import construir_grafo
 from services.algorithm import ordenar_turmas, alocar_horarios
 from services.saver import alocar_salas
@@ -65,8 +66,12 @@ def exibir_grade(db_path):
         print(f"Professor: {professor}")
         print(f"Sala: {bloco}-{sala_num}\n")
 
-#Função para capturar a entrada do usuário.
-def obter_horarios_bloqueados():
+#Função para capturar a entrada do usuário..
+def obter_horarios_bloqueados(db_path):
+    #Consulta os IDs de horários válidos no banco de dados.
+    horarios_validos = set(buscar_horarios(db_path))
+    
+    print("Aviso: O bloqueio de horários aplica-se exclusivamente às turmas do 1º ao 4º período.")
     print("Digite os IDs dos horários que deseja bloquear separados por vírgula (Ex: 1, 2, 3).")
     print("Deixe em branco e aperte ENTER se não quiser bloquear nenhum horário.")
     entrada = input("IDs bloqueados: ")
@@ -76,23 +81,30 @@ def obter_horarios_bloqueados():
         return horarios
         
     for item in entrada.split(','):
+        val = item.strip()
+        if not val:
+            continue
         try:
-            horarios.add(int(item.strip()))
+            hor_id = int(val)
+            if hor_id in horarios_validos:
+                horarios.add(hor_id)
+            else:
+                print(f"Aviso: O ID de horário '{hor_id}' não existe no banco de dados e foi ignorado.")
         except ValueError:
-            print(f"Aviso: O valor '{item.strip()}' é inválido e foi ignorado.")
+            print(f"Aviso: O valor '{val}' é inválido e foi ignorado.")
             
     return horarios
 
 
 if __name__ == "__main__":
-    #Localiza o banco corretamente.
+    #Localiza o banco.
     base_dir = os.path.dirname(os.path.abspath(__file__))
     DB_PATH = os.path.join(base_dir, "banco_projeto.db")
     
     SEMESTRE = 2
     
-    #Captura os horários bloqueados dinamicamente via terminal
-    horarios_bloqueados = obter_horarios_bloqueados()
+    #Captura os horários.
+    horarios_bloqueados = obter_horarios_bloqueados(DB_PATH)
     print(f"\nHorários bloqueados definidos para o sistema: {horarios_bloqueados or 'Nenhum'}")
 
     #Constrói o grafo.
@@ -106,7 +118,7 @@ if __name__ == "__main__":
     if turmas_sem_horario:
         print("\nERRO: Não foi possível alocar horários para as seguintes turmas:")
         for turma in turmas_sem_horario:
-            print(f"- Turma (Objeto/ID): {turma}") 
+            print(f"- Turma {turma.tur_codigo}: {turma.dis_nome} (Prof: {turma.pro_nome})") 
     else:
         #Só tenta alocar as salas e salvar no banco se todos os horários deram certo.
         turmas_sem_sala = alocar_salas(DB_PATH, grafo, ordem) 
@@ -114,6 +126,6 @@ if __name__ == "__main__":
         if turmas_sem_sala:
             print("\nERRO: Não há salas disponíveis suficientes para as seguintes turmas:")
             for turma in turmas_sem_sala:
-                print(f"- Turma (Objeto/ID): {turma}")
+                print(f"- Turma {turma.tur_codigo}: {turma.dis_nome} (Prof: {turma.pro_nome})")
         else:
             exibir_grade(DB_PATH)

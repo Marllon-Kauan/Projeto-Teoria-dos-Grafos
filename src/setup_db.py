@@ -11,7 +11,7 @@ def inicializar_banco():
     
     #Define os caminhos para o banco e o arquivo SQL.
     db_path = os.path.join(base_dir, 'banco_projeto.db')
-    sql_path = os.path.join(base_dir, 'database', 'carga_de_dados.sql')
+    sql_path = os.path.join(base_dir, 'database', 'carga_de_dados_mock.sql')
     
     #Se o banco já existir, remove para recriar do zero.
     if os.path.exists(db_path):

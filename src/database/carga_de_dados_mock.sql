@@ -248,23 +248,28 @@ INSERT INTO dis_disciplina (dis_id, dis_nome, dis_codigo, dis_eletiva, dis_carga
 (77, 'Verificação e Validação', 'CCMP0130', 1, 60, NULL),
 (78, 'Visão Computacional', 'CCMP0093', 1, 60, NULL);
  
+-- MOCK DE DADOS BALANCEADO PARA TESTE DE ALOCAÇÃO
+-- Contém 12 turmas no total, com foco no 1º ao 4º período e cruzamento de professores.
+
 INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) VALUES
-(1, 2026101, 1, 1, 2), -- Alexandre - Mineração de Dados 
-(2, 2026102, 2, 2, 2), -- Byron - Aprendizagem de Máquina 
-(3, 2026103, 3, 3, 2), -- Carmelo - Sistemas de Comunicação 
-(4, 2026104, 4, 4, 2), -- Cleyton - Algoritmos e Estruturas de Dados 
-(5, 2026106, 5, 6, 2), -- Daniel - Controle de Processos 
-(6, 2026107, 5, 7, 2), -- Daniel - Redes de Computadores 2 
-(7, 2026108, 6, 8, 2); -- Wylliams - Engenharia de Software
- 
-INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES
-(1, 1, 1, 21), -- Mineração de Dados - Quinta C 
-(2, 1, 1, 22), -- Mineração de Dados - Quinta D 
-(3, 2, 2, 9), -- Aprendizagem de Máquina - Terca C 
-(4, 2, 2, 10), -- Aprendizagem de Máquina - Terca D 
-(5, 3, 3, 21), -- Sistemas de Comunicação - Quinta C 
-(6, 4, 4, 1), -- Algoritmos e Estruturas de Dados - Segunda A 
-(7, 4, 4, 2), -- Algoritmos e Estruturas de Dados - Segunda B 
-(8, 5, 1, 23), -- Controle de Processos - Quinta E 
-(9, 6, 2, 21), -- Redes de Computadores 2 - Quinta C 
-(10, 7, 3, 22); -- Engenharia de Software - Quinta D
+-- === 1º PERÍODO (Disciplinas 9 e 10) ===
+(1, 2026101, 1, 9, 2), 
+(2, 2026102, 2, 10, 2),
+
+-- === 2º PERÍODO (Disciplina 11) ===
+(3, 2026201, 3, 11, 2), 
+(4, 2026202, 1, 11, 2), 
+
+-- === 3º PERÍODO (Disciplinas 12, 13 e 14) ===
+(5, 2026301, 4, 12, 2),
+(6, 2026302, 5, 13, 2),
+(7, 2026303, 2, 14, 2), 
+
+-- === 4º PERÍODO (Disciplinas 4, 15 e 16) ===
+(8, 2026401, 6, 4, 2),
+(9, 2026402, 7, 15, 2),
+(10, 2026403, 3, 16, 2), 
+
+-- === PERÍODOS SUPERIORES  ===
+(11, 2026801, 8, 6, 2), 
+(12, 2026901, 9, 1, 2); 
