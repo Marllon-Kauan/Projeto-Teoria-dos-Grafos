@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  {# "Gerar grade" roda o algoritmo do back e regrava as alocações no banco #}
+  <form method="post" action="{{ url_for('gerar') }}" style="display:contents">
+    {% if filtro_tipo %}<input type="hidden" name="{{ filtro_tipo }}" value="{{ filtro_valor }}">{% endif %}
+    <button class="btn primary" type="submit">Gerar grade</button>
+  </form>
+
+  <span class="sep"></span>
+
+  {% if filtro_tipo %}
+    <a class="btn {% if modo_edicao %}ativo{% endif %}"
+       href="{{ url_for('index', **({filtro_tipo: filtro_valor, 'editar': '0' if modo_edicao else '1'})) }}">
+      {% if modo_edicao %}Sair da edição{% else %}Editar Turma{% endif %}
+    </a>
+  {% else %}
+    <span class="btn desabilitado"> Editar Turma</span>
+  {% endif %}
+
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+
+  <span class="espaco"></span>
+
+  {% if filtro_tipo %}
+    <a class="btn" href="{{ url_for('exportar_pdf', **{filtro_tipo: filtro_valor}) }}">Exportar PDF</a>
+    <a class="btn" href="{{ url_for('exportar_csv', **{filtro_tipo: filtro_valor}) }}">Exportar CSV</a>
+  {% else %}
+    <span class="btn desabilitado">Exportar PDF</span>
+    <span class="btn desabilitado">Exportar CSV</span>
+  {% endif %}
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="layout">
+
+  {# ---------- 3) Filtro de pesquisa ---------- #}
+  <aside class="painel" id="filtro">
+    <div class="painel-head"><h2>Filtro de pesquisa</h2></div>
+    <div class="painel-body">
+      <form method="get" action="{{ url_for('index') }}" id="form-filtro">
+        <div class="campo">
+          <label for="periodo">Período</label>
+          <select name="periodo" id="periodo"
+                  {% if filtro_tipo == 'professor' %}disabled{% endif %}>
+            <option value="">Selecione o período</option>
+            {% for p in periodos %}
+              <option value="{{ p }}" {% if filtro_tipo == 'periodo' and filtro_valor == p %}selected{% endif %}>
+                {{ p }}º período
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <p class="ou">ou</p>
+
+        <div class="campo">
+          <label for="professor">Professor</label>
+          <select name="professor" id="professor"
+                  {% if filtro_tipo == 'periodo' %}disabled{% endif %}>
+            <option value="">Selecione o professor</option>
+            {% for prof in professores %}
+              <option value="{{ prof }}" {% if filtro_tipo == 'professor' and filtro_valor == prof %}selected{% endif %}>
+                {{ prof }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button class="btn primary" type="submit" style="margin-bottom:16px">Pesquisar</button>
+
+        <p class="nota">
+          {% if filtro_tipo %}
+            Filtro por <b>{{ 'período' if filtro_tipo == 'periodo' else 'professor' }}</b>.
+            Limpe para pesquisar pelo outro campo.
+          {% else %}
+            Pesquise por período <b>ou</b> por professor. Ao escolher um, o outro é bloqueado.
+          {% endif %}
+        </p>
+      </form>
+
+      {% if filtro_tipo %}
+        <a class="link" href="{{ url_for('index') }}">Limpar filtro</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  {# ---------- 4) Grade horária ---------- #}
+  <section class="painel" id="grade">
+    <div class="painel-head">
+      <h2>{% if titulo %}Grade horária — {{ titulo }}{% else %}Grade horária{% endif %}</h2>
+      <span class="sub">
+        {% if filtro_tipo %}{{ total_aulas }} aula(s) alocada(s) · Semestre {{ semestre }}
+        {% else %}Nenhum filtro aplicado{% endif %}
+      </span>
+    </div>
+
+    {% if modo_edicao %}
+      <p class="barra-edicao">
+        Modo de edição: clique em uma aula e depois em um horário vazio para movê-la.
+        O sistema verifica as restrições antes de aplicar.
+      </p>
+    {% endif %}
+
+    {% if not filtro_tipo %}
+      <div class="vazio">
+        <strong>Nenhuma grade gerada</strong>
+        Escolha um período ou um professor no filtro e clique em “Pesquisar”.
+        Se o banco ainda não tem aulas alocadas, use “Gerar grade” na barra de comandos.
+      </div>
+    {% elif total_aulas == 0 %}
+      <div class="vazio">
+        <strong>Sem aulas alocadas</strong>
+        Não há aulas alocadas para {{ titulo }} no semestre {{ semestre }}.
+        Use “Gerar grade” na barra de comandos para rodar o algoritmo.
+      </div>
+    {% else %}
+      <div class="rolagem">
+        <table class="grade">
+          <thead>
+            <tr>
+              <th class="hora">Horários</th>
+              {% for dia in dias %}<th>{{ dia }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for faixa in horarios %}
+              {% set i = loop.index0 %}
+              <tr>
+                <th class="hora">{{ faixa }}</th>
+                {% for dia in dias %}
+                  {% set aula = tabela.get((dia, i)) %}
+                  {% if aula %}
+                    {% set t = aula.t %}
+                    <td class="celula">
+                      <div class="aula cor{{ disciplinas[t.cod].cor }}" data-aula="{{ aula.id }}">
+                        <span class="cod">{{ t.cod }} · {{ t.turma }}</span>
+                        <span class="nome">{{ disciplinas[t.cod].nome }}</span>
+                        <span class="meta">
+                          Sala {{ t.sala }} ·
+                          {% if filtro_tipo == 'periodo' %}{{ t.prof }}{% else %}{{ t.periodo }}º período{% endif %}
+                        </span>
+                      </div>
+                    </td>
+                  {% else %}
+                    <td class="celula livre" data-dia="{{ dia }}" data-h="{{ i }}"></td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ---------- 5) Informações adicionais ---------- #}
+  <section class="painel" id="extra">
+    <div class="painel-head"><h2>Informações adicionais</h2></div>
+    {% if catalogo %}
+      <div class="rolagem">
+        <table class="catalogo">
+          <thead>
+            <tr>
+              <th>Código</th><th>Disciplina</th><th>Turma</th>
+              <th>Professor</th><th>Sala</th><th>Aulas/semana</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in catalogo %}
+              <tr>
+                <td><span class="tag cor{{ d.cor }}">{{ d.cod }}</span></td>
+                <td>{{ d.nome }}</td>
+                <td>{{ d.turma }}</td>
+                <td>{{ d.prof }}</td>
+                <td>{{ d.sala }}</td>
+                <td>{{ d.qtd }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="resumo">
+        Disciplinas: <b>{{ catalogo|length }}</b> ·
+        Carga semanal: <b>{{ total_aulas }} aulas</b>
+      </p>
+    {% else %}
+      <div class="vazio">O catálogo de disciplinas aparece aqui depois que a grade for gerada.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if modo_edicao %}
+  <script src="{{ url_for('static', filename='js/edicao.js') }}"></script>
+{% endif %}
+{% endblock %}

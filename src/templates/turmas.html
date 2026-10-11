@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block titulo %}Turmas{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
+  <span class="sep"></span>
+  <a class="btn ativo" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Turmas do semestre {{ semestre }}</h2>
+      <span class="sub">Relaciona cada disciplina ao professor responsável. A sala é escolhida pelo algoritmo.</span>
+    </div>
+
+    <div class="rolagem">
+      <table class="catalogo">
+        <thead>
+          <tr><th>Código</th><th>Disciplina</th><th>Turma</th><th>Professor</th><th>Período</th><th>Sala</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for t in turmas %}
+            <tr>
+              <td><span class="tag cor{{ disciplinas[t.cod].cor }}">{{ t.cod }}</span></td>
+              <td>{{ disciplinas[t.cod].nome }}</td>
+              <td>{{ t.turma }}</td>
+              <td>{{ t.prof }}</td>
+              <td>{% if t.periodo %}{{ t.periodo }}º{% else %}Eletiva{% endif %}</td>
+              <td>{{ t.sala or '—' }}</td>
+              <td>
+                <form method="post" action="{{ url_for('excluir_turma', turma_id=t.id) }}">
+                  <button class="link perigo" type="submit">Excluir</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7" class="vazio">Nenhuma turma cadastrada neste semestre.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head"><h2>Cadastrar turma</h2></div>
+    <form class="painel-body formulario" method="post" action="{{ url_for('nova_turma') }}">
+      <div class="campo">
+        <label for="cod">Disciplina</label>
+        <select name="cod" id="cod" required>
+          {% for cod, d in disciplinas.items() %}
+            <option value="{{ cod }}">{{ cod }} — {{ d.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="turma">Turma</label>
+        <input name="turma" id="turma" type="number" placeholder="2026101" required>
+      </div>
+      <div class="campo">
+        <label for="prof">Professor</label>
+        <select name="prof" id="prof" required>
+          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn primary" type="submit">Cadastrar turma</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

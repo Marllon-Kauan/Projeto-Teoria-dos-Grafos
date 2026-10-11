@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Grade Horária{% endblock %} — Semestre {{ semestre }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/estilo.css') }}">
+</head>
+<body>
+
+{# ---------- 1) Barra superior ---------- #}
+<header class="topbar">
+  <div class="brand">
+    <a class="logo" href="{{ url_for('index') }}">Grade Horária</a>
+    <span class="semestre">Semestre {{ semestre }}</span>
+  </div>
+  <span class="curso">Bacharelado em Engenharia da Computação</span>
+</header>
+
+{# ---------- 2) Barra de comandos ---------- #}
+{% block toolbar %}{% endblock %}
+
+{% with mensagens = get_flashed_messages(with_categories=true) %}
+  {% if mensagens %}
+    <div class="avisos">
+      {% for categoria, texto in mensagens %}
+        <p class="aviso {{ categoria }}">{{ texto }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% block conteudo %}{% endblock %}
+
+<div id="toasts"></div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

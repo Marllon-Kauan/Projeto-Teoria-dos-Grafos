@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block titulo %}Restrições{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
+  <span class="sep"></span>
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn ativo" href="{{ url_for('restricoes') }}">Restrições</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Restrições de horário do semestre {{ semestre }}</h2>
+      <span class="sub">Horários em que o professor não pode ter aula alocada</span>
+    </div>
+
+    <div class="rolagem">
+      <table class="catalogo">
+        <thead><tr><th>Professor</th><th>Dia</th><th>Horário</th><th>Motivo</th><th></th></tr></thead>
+        <tbody>
+          {% for r in restricoes %}
+            <tr>
+              <td>{{ r.prof }}</td>
+              <td>{{ dias_longo[r.dia] }}</td>
+              <td>{{ horarios[r.h] }}</td>
+              <td>{{ r.motivo }}</td>
+              <td>
+                <form method="post" action="{{ url_for('excluir_restricao', restricao_id=r.id) }}">
+                  <button class="link perigo" type="submit">Excluir</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="vazio">Nenhuma restrição cadastrada neste semestre.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head"><h2>Adicionar restrição</h2></div>
+    <form class="painel-body formulario" method="post" action="{{ url_for('nova_restricao') }}">
+      <div class="campo">
+        <label for="prof_r">Professor</label>
+        <select name="prof" id="prof_r" required>
+          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="dia">Dia</label>
+        <select name="dia" id="dia" required>
+          {% for d in dias %}<option value="{{ d }}">{{ dias_longo[d] }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="h">Horário</label>
+        <select name="h" id="h" required>
+          {% for faixa in horarios %}<option value="{{ loop.index0 }}">{{ faixa }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="campo largo">
+        <label for="motivo">Motivo</label>
+        <input name="motivo" id="motivo" placeholder="Reunião de colegiado">
+      </div>
+      <button class="btn primary" type="submit">Adicionar restrição</button>
+    </form>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Aulas seguidas no mesmo dia</h2>
+      <span class="sub">Limite por professor, aplicado a cada turma dele</span>
+    </div>
+
+    {% if preferencias %}
+      <div class="rolagem">
+        <table class="catalogo">
+          <thead><tr><th>Professor</th><th>Limite</th><th></th></tr></thead>
+          <tbody>
+            {% for p in preferencias %}
+              <tr>
+                <td>{{ p.prof }}</td>
+                <td>{% if p.max == 3 %}Não aceita 4 aulas seguidas{% else %}No máximo 2 seguidas{% endif %}</td>
+                <td>
+                  <form method="post" action="{{ url_for('excluir_preferencia', pro_id=p.prof_id) }}">
+                    <button class="link perigo" type="submit">Remover</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <form class="painel-body formulario" method="post" action="{{ url_for('nova_preferencia') }}">
+      <div class="campo">
+        <label for="prof_p">Professor</label>
+        <select name="prof" id="prof_p" required>
+          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="max_p">Limite</label>
+        <select name="max" id="max_p" required>
+          <option value="3">Não aceita 4 aulas seguidas</option>
+          <option value="2">No máximo 2 seguidas</option>
+        </select>
+      </div>
+      <button class="btn primary" type="submit">Salvar preferência</button>
+    </form>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Horários bloqueados</h2>
+      <span class="sub">Valem só para turmas do 1º ao 4º período</span>
+    </div>
+    <form method="post" action="{{ url_for('salvar_bloqueios') }}">
+      <div class="rolagem">
+        <table class="catalogo">
+          <thead>
+            <tr><th>Horário</th>{% for d in dias %}<th>{{ dias_longo[d] }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for faixa in horarios %}
+              {% set i = loop.index0 %}
+              <tr>
+                <td>{{ faixa }}</td>
+                {% for d in dias %}
+                  {% set hid = ids[(d, i)] %}
+                  <td><input type="checkbox" name="bloq" value="{{ hid }}"
+                             {% if hid in bloqueados %}checked{% endif %}
+                             aria-label="Bloquear {{ dias_longo[d] }} {{ faixa }}"></td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="painel-body">
+        <button class="btn primary" type="submit">Salvar bloqueios</button>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

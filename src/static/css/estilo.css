@@ -1,0 +1,305 @@
+/* ============================================================
+   Sistema de Grade Horaria - folha de estilo
+   ============================================================ */
+
+:root{
+  --bg:#EDF0EC;
+  --card:#FFFFFF;
+  --ink:#16211C;
+  --muted:#5C6B63;
+  --line:#D5DBD3;
+  --line-forte:#BCC5BB;
+  --accent:#14614A;
+  --accent-suave:#E0EFE8;
+  --erro:#9B2C23;
+  --erro-suave:#FBE7E4;
+  --alerta:#8A4F0B;
+  --alerta-suave:#FBEEDC;
+  --raio:10px;
+  --sombra:0 1px 2px rgba(22,33,28,.06), 0 8px 24px -16px rgba(22,33,28,.35);
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-size:15px;
+  line-height:1.5;
+}
+
+a{color:inherit}
+
+/* ---------------- 1) Barra superior ---------------- */
+.topbar{
+  background:var(--card);
+  border-bottom:1px solid var(--line);
+  padding:14px 22px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 18px;
+  align-items:baseline;
+  justify-content:space-between;
+}
+.brand{display:flex; flex-wrap:wrap; align-items:baseline; gap:12px}
+.logo{font-size:21px; font-weight:700; text-decoration:none; letter-spacing:-.01em}
+.semestre{
+  background:var(--accent-suave);
+  color:var(--accent);
+  font-size:14px;
+  font-weight:600;
+  border-radius:999px;
+  padding:3px 11px;
+}
+.curso{color:var(--muted); font-size:13px}
+
+/* ---------------- 2) Barra de comandos ---------------- */
+.toolbar{
+  background:var(--card);
+  border-bottom:1px solid var(--line);
+  padding:10px 22px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.espaco{flex:1 1 auto}
+.sep{width:1px; align-self:stretch; background:var(--line); margin:2px 4px}
+
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:transparent;
+  border:1px solid var(--line-forte);
+  border-radius:8px;
+  padding:7px 13px;
+  font-size:14px;
+  font-weight:500;
+  cursor:pointer;
+  text-decoration:none;
+  font-family:inherit;
+}
+.btn:hover{background:var(--accent-suave); border-color:var(--accent)}
+.btn.primary{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ativo{background:var(--accent-suave); border-color:var(--accent); color:var(--accent)}
+.btn.desabilitado{opacity:.45; cursor:not-allowed; pointer-events:none}
+
+/* ---------------- Mensagens ---------------- */
+.avisos{padding:12px 22px 0}
+.aviso{
+  margin:0 0 8px;
+  padding:10px 14px;
+  border-radius:8px;
+  font-size:14px;
+  border-left:4px solid var(--accent);
+  background:var(--accent-suave);
+  color:var(--accent);
+}
+.aviso.erro{border-left-color:var(--erro); background:var(--erro-suave); color:var(--erro)}
+
+/* ---------------- Layout ---------------- */
+.layout{
+  max-width:1360px;
+  margin:0 auto;
+  padding:20px;
+  display:grid;
+  gap:18px;
+  grid-template-columns:260px minmax(0,1fr);
+  grid-template-areas:"filtro grade" "filtro extra";
+  align-items:start;
+}
+#filtro{grid-area:filtro}
+#grade{grid-area:grade}
+#extra{grid-area:extra}
+
+.pagina{
+  max-width:1000px;
+  margin:0 auto;
+  padding:20px;
+  display:grid;
+  gap:18px;
+}
+
+@media (max-width:940px){
+  .layout{grid-template-columns:minmax(0,1fr); grid-template-areas:"filtro" "grade" "extra"}
+}
+
+.painel{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--raio);
+  box-shadow:var(--sombra);
+}
+.painel-head{
+  padding:13px 16px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  justify-content:space-between;
+}
+.painel-head h2{margin:0; font-size:15px; font-weight:600}
+.painel-head .sub{color:var(--muted); font-size:13px}
+.painel-body{padding:16px}
+
+/* ---------------- 3) Filtro de pesquisa ---------------- */
+.campo{margin-bottom:16px}
+.campo label{display:block; font-size:13px; font-weight:600; margin-bottom:6px}
+.campo select,
+.campo input{
+  width:100%;
+  padding:9px 10px;
+  border:1px solid var(--line-forte);
+  border-radius:8px;
+  background:var(--card);
+  color:inherit;
+  font:inherit;
+}
+.campo select:disabled{opacity:.5; background:var(--bg)}
+
+.ou{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:600;
+  margin:0 0 16px;
+}
+.ou::before,.ou::after{content:""; height:1px; background:var(--line); flex:1}
+
+.nota{
+  font-size:12.5px;
+  color:var(--muted);
+  border-top:1px solid var(--line);
+  padding-top:12px;
+  margin:0 0 10px;
+}
+
+.link{
+  background:none;
+  border:none;
+  padding:0;
+  font:inherit;
+  font-size:13px;
+  font-weight:600;
+  color:var(--accent);
+  text-decoration:underline;
+  cursor:pointer;
+}
+.link.perigo{color:var(--erro)}
+
+.formulario{display:grid; gap:0 14px; grid-template-columns:repeat(auto-fit, minmax(180px,1fr))}
+.formulario .largo{grid-column:1 / -1}
+.formulario .btn{justify-self:start}
+
+/* ---------------- 4) Grade horaria ---------------- */
+.barra-edicao{
+  margin:0;
+  padding:10px 16px;
+  background:var(--alerta-suave);
+  color:var(--alerta);
+  border-bottom:1px solid var(--line);
+  font-size:13px;
+}
+
+.rolagem{overflow-x:auto}
+
+table{border-collapse:collapse; width:100%}
+.grade{min-width:760px}
+.grade th,.grade td{border:1px solid var(--line); vertical-align:top}
+.grade thead th{background:var(--bg); font-size:13px; padding:9px 8px}
+.grade th.hora{
+  background:var(--bg);
+  color:var(--muted);
+  font-size:12.5px;
+  font-weight:500;
+  text-align:right;
+  padding:8px 10px;
+  width:100px;
+  white-space:nowrap;
+}
+.celula{height:64px; padding:0}
+
+.aula{
+  height:100%;
+  padding:6px 8px;
+  font-size:12px;
+  line-height:1.35;
+  border-left:3px solid var(--barra);
+  background:var(--tinta);
+}
+.aula .cod{display:block; font-size:11.5px; font-weight:600; color:var(--barra)}
+.aula .nome{display:block; font-weight:600; margin:1px 0 2px}
+.aula .meta{display:block; color:var(--muted); font-size:11.5px}
+
+.cor1{--tinta:#E4EEF6; --barra:#2B5F86}
+.cor2{--tinta:#EAEAF7; --barra:#4A47A0}
+.cor3{--tinta:#E7F1E4; --barra:#3C6B34}
+.cor4{--tinta:#F8EBE2; --barra:#8A5124}
+
+/* modo de edicao */
+body.editando .aula{cursor:grab}
+body.editando .celula.livre{
+  cursor:copy;
+  background:repeating-linear-gradient(135deg,transparent,transparent 7px,var(--bg) 7px,var(--bg) 8px);
+}
+.aula.selecionada{outline:2px solid var(--accent); outline-offset:-2px}
+
+.vazio{padding:46px 24px; text-align:center; color:var(--muted)}
+.vazio strong{display:block; color:var(--ink); font-size:15px; margin-bottom:4px}
+
+/* ---------------- 5) Informacoes adicionais ---------------- */
+.catalogo{min-width:620px}
+.catalogo th{
+  background:var(--bg);
+  text-align:left;
+  font-size:12.5px;
+  font-weight:600;
+  padding:9px 14px;
+  border-bottom:1px solid var(--line);
+}
+.catalogo td{padding:9px 14px; font-size:13.5px; border-bottom:1px solid var(--line)}
+.catalogo form{margin:0}
+
+.tag{
+  display:inline-block;
+  border-radius:5px;
+  padding:1px 7px;
+  font-size:12px;
+  font-weight:600;
+  background:var(--tinta);
+  color:var(--barra);
+}
+
+.resumo{margin:0; padding:12px 16px; color:var(--muted); font-size:13px}
+.resumo b{color:var(--ink)}
+
+/* ---------------- Toasts do modo de edicao ---------------- */
+#toasts{
+  position:fixed;
+  right:16px;
+  bottom:16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:50;
+  max-width:min(380px, calc(100vw - 32px));
+}
+.toast{
+  background:var(--card);
+  border:1px solid var(--line-forte);
+  border-left:4px solid var(--accent);
+  border-radius:8px;
+  padding:10px 14px;
+  font-size:13.5px;
+  box-shadow:var(--sombra);
+}
+.toast.erro{border-left-color:var(--erro)}
+
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}

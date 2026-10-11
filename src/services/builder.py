@@ -7,9 +7,16 @@ from models.grafo import GrafoSemestre
 from database.connection import buscar_turmas, buscar_horarios
 
 #Molda o grafo completo antes do algoritmo atuar.
-def construir_grafo(db_path, id_semestre, horarios_bloqueados):
+def construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_professor=None, max_seguidas_professor=None, horarios_alocaveis=None):
+    #restricoes_professor: {pro_id: {hor_id, ...}} com horários em que o professor não pode dar aula.
+    #max_seguidas_professor: {pro_id: n} com o máximo de aulas seguidas no mesmo dia que o professor aceita.
+    restricoes_professor = restricoes_professor or {}
+    max_seguidas_professor = max_seguidas_professor or {}
+    #horarios_alocaveis: se informado, restringe os horários que o algoritmo pode usar.
     rows = buscar_turmas(db_path, id_semestre) #Pega todas as informações de turma daquele semestre.
     todos_horarios = set(buscar_horarios(db_path)) #Pega todos os IDs de horário.
+    if horarios_alocaveis:
+        todos_horarios &= set(horarios_alocaveis)
     
     #Inicializa o Grafo.
     grafo = GrafoSemestre(id_semestre)
@@ -30,6 +37,12 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados):
         #Se a turma pertencer aos períodos básicos (1 a 4), restrição de horários bloqueados pelo usuário.
         if turma.idper_periodo in [1, 2, 3, 4]:
             turma.dominio_horarios = turma.dominio_horarios - horarios_bloqueados
+
+        #Restrições de horário do professor valem para qualquer período.
+        turma.dominio_horarios = turma.dominio_horarios - restricoes_professor.get(turma.pro_id, set())
+
+        #Limite de aulas seguidas no mesmo dia pedido pelo professor.
+        turma.max_seguidas = max_seguidas_professor.get(turma.pro_id)
 
         #Adiciona a turma como um vértice no grafo.
         grafo.add_vertice(turma)

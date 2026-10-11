@@ -8,6 +8,7 @@ from database.connection import buscar_horarios
 from services.builder import construir_grafo
 from services.algorithm import ordenar_turmas, alocar_horarios
 from services.saver import alocar_salas
+import verificar_regras
 
 #Função que exibe a grade horária.
 def exibir_grade(db_path):
@@ -129,3 +130,6 @@ if __name__ == "__main__":
                 print(f"- Turma {turma.tur_codigo}: {turma.dis_nome} (Prof: {turma.pro_nome})")
         else:
             exibir_grade(DB_PATH)
+
+    print("\n--- Verificando Integridade da Grade ---")
+    verificar_regras.main(max_seguidas=2)
