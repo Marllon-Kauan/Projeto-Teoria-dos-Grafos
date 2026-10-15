@@ -121,7 +121,20 @@
       <h2>Horários bloqueados</h2>
       <span class="sub">Valem só para turmas do 1º ao 4º período</span>
     </div>
+    <nav class="toolbar" aria-label="Selecionar período dos bloqueios">
+      {% for p in periodos_bloqueaveis %}
+        <a class="btn {% if p == periodo_bloqueio %}ativo{% endif %}"
+           href="{{ url_for('restricoes', periodo=p) }}"
+           {% if p == periodo_bloqueio %}aria-current="page"{% endif %}>
+          {{ p }}º período
+        </a>
+      {% endfor %}
+    </nav>
     <form method="post" action="{{ url_for('salvar_bloqueios') }}">
+      <input type="hidden" name="periodo" value="{{ periodo_bloqueio }}">
+      <div class="painel-body">
+        <strong>Horários bloqueados para o {{ periodo_bloqueio }}º período</strong>
+      </div>
       <div class="rolagem">
         <table class="catalogo">
           <thead>

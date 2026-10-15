@@ -82,10 +82,34 @@ def garantir_esquema():
                 idpro_professor INT PRIMARY KEY,
                 pre_maxSeguidas INT NOT NULL
             )""")
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS blq_bloqueio (
-                idhor_horario INT PRIMARY KEY
-            )""")
+        if "blq_bloqueio" not in existentes:
+            c.execute("""
+                CREATE TABLE blq_bloqueio (
+                    idper_periodo INT NOT NULL,
+                    idhor_horario INT NOT NULL,
+                    PRIMARY KEY (idper_periodo, idhor_horario)
+                )""")
+        else:
+            colunas_bloqueio = {r[1] for r in c.execute("PRAGMA table_info(blq_bloqueio)")}
+            if "idper_periodo" not in colunas_bloqueio:
+                # Mantem a configuracao global anterior replicando-a nos periodos 1 a 4.
+                c.execute("ALTER TABLE blq_bloqueio RENAME TO blq_bloqueio_antigo")
+                c.execute("""
+                    CREATE TABLE blq_bloqueio (
+                        idper_periodo INT NOT NULL,
+                        idhor_horario INT NOT NULL,
+                        PRIMARY KEY (idper_periodo, idhor_horario)
+                    )""")
+                c.execute("""
+                    INSERT INTO blq_bloqueio (idper_periodo, idhor_horario)
+                    SELECT periodo.idper_periodo, antigo.idhor_horario
+                    FROM blq_bloqueio_antigo AS antigo
+                    CROSS JOIN (
+                        SELECT 1 AS idper_periodo UNION ALL SELECT 2
+                        UNION ALL SELECT 3 UNION ALL SELECT 4
+                    ) AS periodo
+                    """)
+                c.execute("DROP TABLE blq_bloqueio_antigo")
 
 
 # ---------------------------------------------------------------- horarios
@@ -262,9 +286,14 @@ def max_seguidas_por_professor():
     return {p["prof_id"]: p["max"] for p in preferencias()}
 
 
-def bloqueados():
+def bloqueados_por_periodo():
+    """{periodo: {hor_id, ...}} com os bloqueios de cada periodo basico."""
+    resultado = {periodo: set() for periodo in PERIODOS_BLOQUEAVEIS}
     with conexao() as c:
-        return {r[0] for r in c.execute("SELECT idhor_horario FROM blq_bloqueio")}
+        for r in c.execute("SELECT idper_periodo, idhor_horario FROM blq_bloqueio"):
+            if r[0] in resultado:
+                resultado[r[0]].add(r[1])
+    return resultado
 
 
 # ---------------------------------------------------------------- escrita
@@ -324,12 +353,16 @@ def excluir_preferencia(pro_id):
         c.execute("DELETE FROM pre_preferencia WHERE idpro_professor = ?", (pro_id,))
 
 
-def salvar_bloqueados(ids):
+def salvar_bloqueados(periodo, ids):
+    if periodo not in PERIODOS_BLOQUEAVEIS:
+        return set()
     validos = set(_mapa_horarios()[0].keys())
     ids = {i for i in ids if i in validos}
     with conexao() as c:
-        c.execute("DELETE FROM blq_bloqueio")
-        c.executemany("INSERT INTO blq_bloqueio (idhor_horario) VALUES (?)", [(i,) for i in ids])
+        c.execute("DELETE FROM blq_bloqueio WHERE idper_periodo = ?", (periodo,))
+        c.executemany(
+            "INSERT INTO blq_bloqueio (idper_periodo, idhor_horario) VALUES (?, ?)",
+            [(periodo, i) for i in ids])
     return ids
 
 

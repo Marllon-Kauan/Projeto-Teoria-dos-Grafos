@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Roda o algoritmo completo (grafo -> horarios -> salas) e devolve o resultado,
 em vez de imprimir no terminal como o main.py faz. E o que o front chama.
@@ -16,8 +17,16 @@ def gerar_grade(db_path, id_semestre, horarios_bloqueados, restricoes_prof, max_
     """
     Retorna {"ok": bool, "etapa": "horario"|"sala"|None, "turmas": [descricoes]}.
     Se falhar, o banco continua com a grade anterior.
+
+    horarios_bloqueados pode ser:
+      - dict {periodo: {hor_id, ...}}  (formato do repositorio.bloqueados_por_periodo)
+      - conjunto/lista global de hor_id (compatibilidade com o main.py)
     """
-    grafo = construir_grafo(db_path, id_semestre, set(horarios_bloqueados), restricoes_prof, max_seguidas_prof, horarios_alocaveis)
+    # Nao usar set() em cima do dict: isso viraria o conjunto das chaves {1, 2, 3, 4}.
+    if not isinstance(horarios_bloqueados, dict):
+        horarios_bloqueados = set(horarios_bloqueados)
+
+    grafo = construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_prof, max_seguidas_prof, horarios_alocaveis)
     ordem = ordenar_turmas(grafo)
 
     sem_horario = alocar_horarios(grafo, ordem)

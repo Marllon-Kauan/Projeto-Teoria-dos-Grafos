@@ -36,7 +36,12 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_profes
 
         #Se a turma pertencer aos períodos básicos (1 a 4), restrição de horários bloqueados pelo usuário.
         if turma.idper_periodo in [1, 2, 3, 4]:
-            turma.dominio_horarios = turma.dominio_horarios - horarios_bloqueados
+            if isinstance(horarios_bloqueados, dict):
+                bloqueios_turma = horarios_bloqueados.get(str(turma.idper_periodo), horarios_bloqueados.get(turma.idper_periodo, set()))
+            else:
+                # Compatibilidade com o main.py, que ainda solicita um conjunto global.
+                bloqueios_turma = horarios_bloqueados
+            turma.dominio_horarios = turma.dominio_horarios - bloqueios_turma
 
         #Restrições de horário do professor valem para qualquer período.
         turma.dominio_horarios = turma.dominio_horarios - restricoes_professor.get(turma.pro_id, set())

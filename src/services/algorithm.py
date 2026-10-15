@@ -4,6 +4,22 @@ Ordena a prioridade das turmas e encaixa os horários duplos ou avulsos sem gera
 
 from collections import deque
 
+#Maior quantidade de aulas seguidas no mesmo dia entre os horários informados.
+#Os IDs seguem a mesma lógica dos blocos geminados abaixo: 6 horários por dia (1-6 segunda, 7-12 terça...).
+def maior_sequencia_no_dia(horarios):
+    por_dia = {}
+    for h in horarios:
+        por_dia.setdefault((h - 1) // 6, []).append((h - 1) % 6)
+
+    maior = 0
+    for slots in por_dia.values():
+        slots.sort()
+        atual = 0
+        for i, s in enumerate(slots):
+            atual = atual + 1 if i > 0 and s == slots[i - 1] + 1 else 1
+            maior = max(maior, atual)
+    return maior
+
 #Define em qual ordem as turmas devem ser resolvidas.
 def ordenar_turmas(grafo):
     visitados = set()      #Rastrear as turmas já processadas.
@@ -76,8 +92,12 @@ def alocar_horarios(grafo, ordem_alocacao):
             
             #Verifica se os dois horários estão disponíveis nas regras da turma.
             if h1 not in turma.dominio_horarios or h2 not in turma.dominio_horarios:
-                continue 
-                
+                continue
+
+            #Se o professor limitou aulas seguidas no dia, ignora o bloco que ultrapassa o limite.
+            if turma.max_seguidas and maior_sequencia_no_dia(turma.horarios_alocados + [h1, h2]) > turma.max_seguidas:
+                continue
+
             conflito = False
             #Checa todos os vizinhos conflitantes dessa turma.
             for vizinho_id in grafo.adjacencias.get(tur_id, {}):
@@ -99,6 +119,9 @@ def alocar_horarios(grafo, ordem_alocacao):
             for h in turma.dominio_horarios:
                 #Verifica se a turma já não está ocupando esse horário.
                 if h not in turma.horarios_alocados:
+                    #Mesmo limite de aulas seguidas para a aula avulsa.
+                    if turma.max_seguidas and maior_sequencia_no_dia(turma.horarios_alocados + [h]) > turma.max_seguidas:
+                        continue
                     conflito = False
                     #Checa todos os vizinhos conflitantes da turma.
                     for vizinho_id in grafo.adjacencias.get(tur_id, {}):

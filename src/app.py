@@ -119,8 +119,9 @@ def validar_movimento(aula, dia_destino, h_destino):
     onde = "%s, %s" % (repo.DIAS_LONGO[dia_destino], repo.horarios()[h_destino])
 
     # 1) horario bloqueado pelo usuario (vale so para o 1o ao 4o periodo)
-    if turma["periodo"] in repo.PERIODOS_BLOQUEAVEIS and destino in repo.bloqueados():
-        return "%s esta bloqueado para turmas do 1o ao 4o periodo." % onde
+    if (turma["periodo"] in repo.PERIODOS_BLOQUEAVEIS
+            and destino in repo.bloqueados_por_periodo().get(turma["periodo"], set())):
+        return "%s esta bloqueado para turmas do %do periodo." % (onde, turma["periodo"])
 
     # 2) restricao de horario do professor
     for r in repo.restricoes():
@@ -196,7 +197,7 @@ def gerar():
     tipo, valor, _ = ler_filtro(request.form)
 
     resultado = gerar_grade(
-        repo.DB_PATH, repo.SEMESTRE_ID, repo.bloqueados(), repo.restricoes_por_professor(),
+        repo.DB_PATH, repo.SEMESTRE_ID, repo.bloqueados_por_periodo(), repo.restricoes_por_professor(),
         repo.max_seguidas_por_professor(), repo.ids_do_algoritmo())
 
     if resultado["ok"]:
@@ -252,6 +253,10 @@ def excluir_turma(turma_id):
 @app.route("/restricoes")
 def restricoes():
     """Restricoes de horario dos professores + horarios bloqueados."""
+    periodo_bloqueio = request.args.get("periodo", default=1, type=int)
+    if periodo_bloqueio not in repo.PERIODOS_BLOQUEAVEIS:
+        periodo_bloqueio = 1
+    bloqueios = repo.bloqueados_por_periodo()
     return render_template(
         "restricoes.html",
         semestre=repo.semestre(),
@@ -261,7 +266,9 @@ def restricoes():
         dias_longo=repo.DIAS_LONGO,
         horarios=repo.horarios(),
         ids=repo.ids_por_dia_h(),
-        bloqueados=repo.bloqueados(),
+        bloqueados=bloqueios[periodo_bloqueio],
+        periodo_bloqueio=periodo_bloqueio,
+        periodos_bloqueaveis=repo.PERIODOS_BLOQUEAVEIS,
         preferencias=repo.preferencias(),
     )
 
@@ -310,11 +317,16 @@ def excluir_restricao(restricao_id):
 
 @app.route("/restricoes/bloqueios", methods=["POST"])
 def salvar_bloqueios():
+    periodo = request.form.get("periodo", "1")
+    if not periodo.isdigit() or int(periodo) not in repo.PERIODOS_BLOQUEAVEIS:
+        flash("Selecione um periodo valido para salvar os bloqueios.", "erro")
+        return redirect(url_for("restricoes", periodo=1))
+    periodo = int(periodo)
     ids = {int(v) for v in request.form.getlist("bloq") if v.isdigit()}
-    salvos = repo.salvar_bloqueados(ids)
-    flash("%d horario(s) bloqueado(s) para o 1o ao 4o periodo. Use \"Gerar grade\" para aplicar."
-          % len(salvos), "ok")
-    return redirect(url_for("restricoes"))
+    salvos = repo.salvar_bloqueados(periodo, ids)
+    flash("%d horario(s) bloqueado(s) para o %do periodo. Use \"Gerar grade\" para aplicar."
+          % (len(salvos), periodo), "ok")
+    return redirect(url_for("restricoes", periodo=periodo))
 
 
 # ---------------------------------------------------------------- edicao
