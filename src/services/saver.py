@@ -14,9 +14,6 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
     cursor.execute("SELECT sal_id, sal_bloco, sal_numero FROM sal_sala ORDER BY sal_id") 
     salas_disponiveis = cursor.fetchall()
     
-    #Exclui os registros anteriores da tabela.
-    cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
-    
     #Busca qual o maior ID atual na tabela de alocação para não haver duplicidade de chave primária.
     cursor.execute("SELECT MAX(alo_id) FROM alo_alocacaoHorarioSala")
     max_id = cursor.fetchone()[0] #Extrai o maior ID encontrado
@@ -24,6 +21,7 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
     
     ocupacao_salas = {}  #Dicionário para controlar salas usadas e seus horários.
     turmas_sem_sala = [] #Lista para registrar turmas que não encontraram sala.
+    novas_alocacoes = [] #Lista para guardar as alocações na memória antes de salvar.
     
     #Percorre as turmas.
     for tur_id in ordem_alocacao:
@@ -62,20 +60,30 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
                 #Adiciona a sala na lista de ocupados daquele horário.
                 ocupacao_salas[h].append(sala_escolhida)
                 
-                #Alocação de Turma + Sala + Horário no banco.
-                cursor.execute(
-                    "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
-                    (next_id, tur_id, sala_escolhida, h)
-                )
+                #Guarda a alocação na memória, mas não salva no banco ainda.
+                novas_alocacoes.append((next_id, tur_id, sala_escolhida, h))
                 next_id += 1 #Incrementa o ID da chave primária.
-        #Registra que a turma ficou sem sala (sem sala viável).
         else:
-            #Registra que a turma ficou sem sala.
+            #Registra que a turma ficou sem sala (sem sala viável).
             turmas_sem_sala.append(turma)
             
+    #Só altera o banco se todas as turmas tiverem conseguido sala.
+        #Exclui os registros anteriores da tabela com segurança.
+        cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
+        
+        #Salva a nova grade completa.
+        for alocacao in novas_alocacoes:
+            cursor.execute(
+                "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
+                alocacao
+            )
+        #Efetiva as mudanças.
+        conn.commit()
+    else:
+        #Se faltou sala, o banco não sofre commit nem delete. 
+        pass
 
-    conn.commit()
     conn.close()
     
-    #Retorna as turmas que falharam em conseguir sala
+    #Retorna as turmas que falharam em conseguir sala.
     return turmas_sem_sala

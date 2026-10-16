@@ -204,10 +204,10 @@ def gerar():
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
     else:
         if resultado["etapa"] == "horario":
-            flash("Nao foi possivel alocar horarios para: " + "; ".join(resultado["turmas"]) +
+            flash("Não foi possível alocar horarios para: " + "; ".join(resultado["turmas"]) +
                   ". A grade anterior foi mantida.", "erro")
         else:
-            flash("Nao ha salas suficientes para: " + "; ".join(resultado["turmas"]) +
+            flash("Não há salas suficientes para: " + "; ".join(resultado["turmas"]) +
                   ". A grade anterior foi mantida.", "erro")
 
     return redirect(url_for("index", **({tipo: valor} if tipo else {})))
@@ -232,21 +232,21 @@ def nova_turma():
     prof = request.form.get("prof")
 
     if not (cod and codigo.isdigit() and prof):
-        flash("Preencha a disciplina, o professor e o codigo numerico da turma.", "erro")
+        flash("Preencha a disciplina, o professor e o código numerico da turma.", "erro")
         return redirect(url_for("turmas"))
 
     erro = repo.criar_turma(cod, int(codigo), prof)
     if erro:
         flash(erro, "erro")
     else:
-        flash("Turma cadastrada. Use \"Gerar grade\" para aloca-la.", "ok")
+        flash("Turma cadastrada. Use \"Gerar grade\" para alocá-la.", "ok")
     return redirect(url_for("turmas"))
 
 
 @app.route("/turmas/<int:turma_id>/excluir", methods=["POST"])
 def excluir_turma(turma_id):
     repo.excluir_turma(turma_id)
-    flash("Turma excluida junto com as aulas dela.", "ok")
+    flash("Turma excluida junto com as aulas associadas a mesma.", "ok")
     return redirect(url_for("turmas"))
 
 
@@ -281,14 +281,14 @@ def nova_preferencia():
             and repo.salvar_preferencia(prof, int(maximo))):
         flash("Escolha o professor e o limite de aulas seguidas.", "erro")
         return redirect(url_for("restricoes"))
-    flash("Preferencia salva. Use \"Gerar grade\" para aplica-la.", "ok")
+    flash("Preferência salva. Use \"Gerar grade\" para aplicá-la.", "ok")
     return redirect(url_for("restricoes"))
 
 
 @app.route("/preferencias/<int:pro_id>/excluir", methods=["POST"])
 def excluir_preferencia(pro_id):
     repo.excluir_preferencia(pro_id)
-    flash("Preferencia removida.", "ok")
+    flash("Preferência removida.", "ok")
     return redirect(url_for("restricoes"))
 
 
@@ -300,18 +300,18 @@ def nova_restricao():
     motivo = (request.form.get("motivo") or "").strip()
 
     if not (prof in repo.professores() and dia in repo.DIAS and h and h.isdigit()
-            and repo.criar_restricao(prof, dia, int(h), motivo or "Nao informado")):
-        flash("Preencha todos os campos da restricao.", "erro")
+            and repo.criar_restricao(prof, dia, int(h), motivo or "Não informado")):
+        flash("Preencha todos os campos da restrição.", "erro")
         return redirect(url_for("restricoes"))
 
-    flash("Restricao adicionada. Use \"Gerar grade\" para aplica-la.", "ok")
+    flash("Restrição adicionada. Use \"Gerar grade\" para aplicá-la.", "ok")
     return redirect(url_for("restricoes"))
 
 
 @app.route("/restricoes/<int:restricao_id>/excluir", methods=["POST"])
 def excluir_restricao(restricao_id):
     repo.excluir_restricao(restricao_id)
-    flash("Restricao excluida.", "ok")
+    flash("Restrição excluída.", "ok")
     return redirect(url_for("restricoes"))
 
 
@@ -319,12 +319,12 @@ def excluir_restricao(restricao_id):
 def salvar_bloqueios():
     periodo = request.form.get("periodo", "1")
     if not periodo.isdigit() or int(periodo) not in repo.PERIODOS_BLOQUEAVEIS:
-        flash("Selecione um periodo valido para salvar os bloqueios.", "erro")
+        flash("Selecione um período válido para salvar os bloqueios.", "erro")
         return redirect(url_for("restricoes", periodo=1))
     periodo = int(periodo)
     ids = {int(v) for v in request.form.getlist("bloq") if v.isdigit()}
     salvos = repo.salvar_bloqueados(periodo, ids)
-    flash("%d horario(s) bloqueado(s) para o %do periodo. Use \"Gerar grade\" para aplicar."
+    flash("%d horário(s) bloqueado(s) para o %do período. Use \"Gerar grade\" para aplicar."
           % (len(salvos), periodo), "ok")
     return redirect(url_for("restricoes", periodo=periodo))
 

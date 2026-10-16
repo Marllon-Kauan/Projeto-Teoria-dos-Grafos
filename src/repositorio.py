@@ -147,8 +147,8 @@ def hor_id(dia, h):
 
 
 def ids_do_algoritmo():
-    """Horarios que o algoritmo do back usa: segunda a sexta, slots A a F."""
-    return {i for i, (dia, h) in _mapa_horarios()[0].items() if dia != "Sab" and h < 6}
+    """Horarios que o algoritmo do back usa: todos (segunda a sabado, slots A a G)."""
+    return set(_mapa_horarios()[0].keys())
 
 
 def ids_por_dia_h():
@@ -327,9 +327,24 @@ def criar_restricao(prof_nome, dia, h, motivo):
     if pro_id is None or hid is None:
         return False
     with conexao() as c:
-        c.execute(
-            "INSERT INTO res_restricao (idpro_professor, idhor_horario, res_motivo) VALUES (?, ?, ?)",
-            (pro_id, hid, motivo))
+        #Verifica se já existe uma restrição para esse professor nesse horário.
+        existente = c.execute(
+            "SELECT 1 FROM res_restricao WHERE idpro_professor = ? AND idhor_horario = ?", 
+            (pro_id, hid)
+        ).fetchone()
+        
+        if existente:
+            #Se já existe, apenas atualiza o motivo para evitar duplicidade.
+            c.execute(
+                "UPDATE res_restricao SET res_motivo = ? WHERE idpro_professor = ? AND idhor_horario = ?",
+                (motivo, pro_id, hid)
+            )
+        else:
+            #Se não existe, cria a nova restrição.
+            c.execute(
+                "INSERT INTO res_restricao (idpro_professor, idhor_horario, res_motivo) VALUES (?, ?, ?)",
+                (pro_id, hid, motivo)
+            )
     return True
 
 

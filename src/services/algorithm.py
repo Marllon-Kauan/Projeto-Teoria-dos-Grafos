@@ -9,7 +9,7 @@ from collections import deque
 def maior_sequencia_no_dia(horarios):
     por_dia = {}
     for h in horarios:
-        por_dia.setdefault((h - 1) // 6, []).append((h - 1) % 6)
+        por_dia.setdefault((h - 1) // 7, []).append((h - 1) % 7)
 
     maior = 0
     for slots in por_dia.values():
@@ -65,11 +65,12 @@ def ordenar_turmas(grafo):
 #Função que escolhe e distribui os horários.
 def alocar_horarios(grafo, ordem_alocacao):
     blocos_geminados = [
-        (1, 2), (3, 4), (5, 6),       #Segunda
-        (7, 8), (9, 10), (11, 12),    #Terça
-        (13, 14), (15, 16), (17, 18), #Quarta
-        (19, 20), (21, 22), (23, 24), #Quinta
-        (25, 26), (27, 28), (29, 30)  #Sexta
+        (1, 2), (3, 4), (5, 6),       #Segunda 
+        (8, 9), (10, 11), (12, 13),   #Terça   
+        (15, 16), (17, 18), (19, 20), #Quarta  
+        (22, 23), (24, 25), (26, 27), #Quinta  
+        (29, 30), (31, 32), (33, 34), #Sexta   
+        (36, 37), (38, 39), (40, 41)  #Sábado  
     ]
 
     turmas_com_erro = [] #Guarda as turmas que não couberam.
