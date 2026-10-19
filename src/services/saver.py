@@ -67,23 +67,18 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
             #Registra que a turma ficou sem sala (sem sala viável).
             turmas_sem_sala.append(turma)
             
-    #Só altera o banco se todas as turmas tiverem conseguido sala.
-        #Exclui os registros anteriores da tabela com segurança.
-        cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
-        
-        #Salva a nova grade completa.
-        for alocacao in novas_alocacoes:
-            cursor.execute(
-                "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
-                alocacao
-            )
-        #Efetiva as mudanças.
-        conn.commit()
-    else:
-        #Se faltou sala, o banco não sofre commit nem delete. 
-        pass
-
+    #Salva a grade no banco com o que conseguiu alocar (mesmo sendo parcial)
+    cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
+    
+    #Salva a nova grade
+    for alocacao in novas_alocacoes:
+        cursor.execute(
+            "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
+            alocacao
+        )
+    #Efetiva as mudanças
+    conn.commit()
     conn.close()
     
-    #Retorna as turmas que falharam em conseguir sala.
+    #Retorna as turmas que falharam em conseguir sala
     return turmas_sem_sala

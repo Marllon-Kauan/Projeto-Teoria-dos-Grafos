@@ -202,13 +202,11 @@ def gerar():
 
     if resultado["ok"]:
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
+    elif resultado.get("parcial"):
+        #Mostra o aviso de grade parcial e lista as turmas não alocadas.
+        flash("Grade gerada parcialmente. Não foi possível alocar: " + "; ".join(resultado["turmas"]), "erro")
     else:
-        if resultado["etapa"] == "horario":
-            flash("Não foi possível alocar horarios para: " + "; ".join(resultado["turmas"]) +
-                  ". A grade anterior foi mantida.", "erro")
-        else:
-            flash("Não há salas suficientes para: " + "; ".join(resultado["turmas"]) +
-                  ". A grade anterior foi mantida.", "erro")
+        flash("Erro ao gerar a grade.", "erro")
 
     return redirect(url_for("index", **({tipo: valor} if tipo else {})))
 
