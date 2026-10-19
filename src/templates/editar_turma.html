@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block titulo %}Editar turma{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('turmas') }}">Voltar para turmas</a>
+  <span class="sep"></span>
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Turma {{ turma.turma }}</h2>
+      <span class="sub">Semestre {{ semestre }}</span>
+    </div>
+    <div class="rolagem">
+      <table class="catalogo">
+        <thead>
+          <tr>
+            <th>Disciplina</th><th>Professor</th><th>Período</th>
+            <th>Sala(s)</th><th>Aulas alocadas</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <span class="tag cor{{ disciplinas[turma.cod].cor }}">{{ turma.cod }}</span>
+              {{ disciplinas[turma.cod].nome }}
+            </td>
+            <td>{{ turma.prof }}</td>
+            <td>{% if turma.periodo %}{{ turma.periodo }}º{% else %}Eletiva{% endif %}</td>
+            <td>{{ turma.sala or '—' }}</td>
+            <td>{{ qtd_aulas }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Editar turma</h2>
+      <span class="sub">Código, disciplina, professor e sala</span>
+    </div>
+
+    <form class="painel-body formulario" method="post"
+          action="{{ url_for('editar_turma', turma_id=turma.id) }}">
+      <div class="campo largo">
+        <label for="cod">Disciplina</label>
+        <select name="cod" id="cod" required data-atual="{{ turma.cod }}">
+          {% for cod, d in disciplinas.items() %}
+            <option value="{{ cod }}" {% if cod == valores.cod %}selected{% endif %}>
+              {{ cod }} — {{ d.nome }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="campo">
+        <label for="turma">Turma</label>
+        <input name="turma" id="turma" type="number" min="1" step="1"
+               inputmode="numeric" value="{{ valores.turma }}" required>
+      </div>
+
+      <div class="campo">
+        <label for="prof">Professor</label>
+        <select name="prof" id="prof" required>
+          {% for p in professores %}
+            <option value="{{ p }}" {% if p == valores.prof %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="campo">
+        <label for="sala">Sala</label>
+        <select name="sala" id="sala" data-tem-alocacoes="{{ '1' if tem_alocacoes else '0' }}"
+                {% if not tem_alocacoes %}disabled{% endif %}>
+          <option value="">Manter sala atual</option>
+          {% for s in salas %}
+            <option value="{{ s.id }}" {% if valores.sala == s.id|string %}selected{% endif %}>
+              {{ s.nome }}
+            </option>
+          {% endfor %}
+        </select>
+        <p class="ajuda" id="ajuda-sala">
+          {% if tem_alocacoes %}
+            A sala altera todas as aulas já alocadas.
+          {% else %}
+            A sala será definida pelo algoritmo ao gerar a grade.
+          {% endif %}
+        </p>
+      </div>
+
+      <p class="nota largo">
+        Ao trocar a disciplina, as alocações atuais são removidas. Use
+        “Gerar grade” para alocar a turma novamente.
+      </p>
+
+      <div class="acoes-formulario largo">
+        <button class="btn primary" type="submit">Salvar alterações</button>
+        <a class="btn" href="{{ url_for('turmas') }}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var disciplina = document.getElementById("cod");
+  var sala = document.getElementById("sala");
+  var ajuda = document.getElementById("ajuda-sala");
+  if (!disciplina || !sala || !ajuda) return;
+
+  var disciplinaAtual = disciplina.dataset.atual;
+  var temAlocacoes = sala.dataset.temAlocacoes === "1";
+
+  function atualizarSala() {
+    var mudouDisciplina = disciplina.value !== disciplinaAtual;
+    sala.disabled = mudouDisciplina || !temAlocacoes;
+    if (mudouDisciplina) {
+      ajuda.textContent = "A sala será definida pelo algoritmo na nova geração da grade.";
+    } else if (temAlocacoes) {
+      ajuda.textContent = "A sala altera todas as aulas já alocadas.";
+    } else {
+      ajuda.textContent = "A sala será definida pelo algoritmo ao gerar a grade.";
+    }
+  }
+
+  disciplina.addEventListener("change", atualizarSala);
+  atualizarSala();
+})();
+</script>
+{% endblock %}

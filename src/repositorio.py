@@ -219,6 +219,29 @@ def buscar_turma(turma_id):
     return next((t for t in turmas() if t["id"] == turma_id), None)
 
 
+def salas():
+    """Salas cadastradas, para o seletor de edicao da turma."""
+    with conexao() as c:
+        linhas = c.execute(
+            "SELECT sal_id, sal_bloco, sal_numero FROM sal_sala "
+            "ORDER BY sal_bloco, sal_numero").fetchall()
+    return [{"id": r["sal_id"], "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"])}
+            for r in linhas]
+
+
+def salas_da_turma(turma_id):
+    """Salas usadas atualmente pelas aulas da turma."""
+    with conexao() as c:
+        linhas = c.execute("""
+            SELECT DISTINCT SAL.sal_id, SAL.sal_bloco, SAL.sal_numero
+            FROM alo_alocacaoHorarioSala ALO
+            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            WHERE ALO.idtur_turma = ?
+            ORDER BY SAL.sal_bloco, SAL.sal_numero""", (turma_id,)).fetchall()
+    return [{"id": r["sal_id"], "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"])}
+            for r in linhas]
+
+
 def aulas():
     with conexao() as c:
         linhas = c.execute("""
@@ -313,6 +336,92 @@ def criar_turma(cod_disciplina, codigo_turma, prof_nome):
             "INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) "
             "VALUES (?, ?, ?, ?, ?)", (novo, codigo_turma, pro_id, dis["id"], SEMESTRE_ID))
     return None
+
+
+def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=None):
+    """
+    Atualiza os dados da turma. Retorna (erro, aviso).
+
+    - Trocar a disciplina remove as alocacoes da turma (a sala passa a ser
+      definida novamente pelo algoritmo).
+    - Trocar o professor valida restricoes e aulas do novo professor nos
+      horarios ja alocados.
+    - Trocar a sala valida a ocupacao das salas nesses horarios.
+    """
+    atual = buscar_turma(turma_id)
+    if atual is None:
+        return "Turma nao encontrada.", None
+
+    dis = disciplinas().get(cod_disciplina)
+    pro_id = _prof_id(prof_nome)
+    if dis is None or pro_id is None:
+        return "Disciplina ou professor invalido.", None
+    if not isinstance(codigo_turma, int) or codigo_turma <= 0:
+        return "Codigo da turma invalido.", None
+
+    mudou_disciplina = dis["id"] != atual["dis_id"]
+    mudou_professor = pro_id != atual["prof_id"]
+    aulas_turma = [a for a in aulas() if a["turma"] == turma_id]
+    outras_aulas = [a for a in aulas() if a["turma"] != turma_id]
+
+    # Novo professor: restricoes e aulas ja existentes dele no mesmo horario.
+    if mudou_professor and not mudou_disciplina and aulas_turma:
+        restritas = restricoes_por_professor().get(pro_id, set())
+        turmas_por_id = {t["id"]: t for t in turmas()}
+        for aula in aulas_turma:
+            pos = dia_h(aula["hor_id"])
+            quando = ("%s, %s" % (DIAS_LONGO[pos[0]], horarios()[pos[1]])
+                      if pos else "o horario atual")
+            if aula["hor_id"] in restritas:
+                return ("O professor %s tem restricao em %s." % (prof_nome, quando), None)
+            for outra in outras_aulas:
+                if outra["hor_id"] != aula["hor_id"]:
+                    continue
+                t2 = turmas_por_id.get(outra["turma"])
+                if t2 is not None and t2["prof_id"] == pro_id:
+                    return ("O professor %s ja tem aula em %s." % (prof_nome, quando), None)
+
+    # Nova sala: precisa existir e estar livre em todos os horarios da turma.
+    if sala_id is not None:
+        salas_validas = {s["id"]: s["nome"] for s in salas()}
+        if sala_id not in salas_validas:
+            return "Sala invalida.", None
+        if aulas_turma and not mudou_disciplina:
+            for aula in aulas_turma:
+                for outra in outras_aulas:
+                    if outra["hor_id"] == aula["hor_id"] and outra["sal_id"] == sala_id:
+                        pos = dia_h(aula["hor_id"])
+                        quando = ("%s, %s" % (DIAS_LONGO[pos[0]], horarios()[pos[1]])
+                                  if pos else "o horario atual")
+                        return ("A sala %s ja esta ocupada em %s."
+                                % (salas_validas[sala_id], quando), None)
+
+    with conexao() as c:
+        duplicada = c.execute(
+            "SELECT 1 FROM tur_turma WHERE tur_codigo = ? AND idsem_semestre = ? AND tur_id <> ?",
+            (codigo_turma, SEMESTRE_ID, turma_id)).fetchone()
+        if duplicada:
+            return ("Ja existe uma turma com o codigo %s neste semestre."
+                    % codigo_turma, None)
+
+        if mudou_disciplina:
+            c.execute("DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma = ?", (turma_id,))
+
+        c.execute(
+            "UPDATE tur_turma SET tur_codigo = ?, idpro_professor = ?, iddis_disciplina = ? "
+            "WHERE tur_id = ?",
+            (codigo_turma, pro_id, dis["id"], turma_id))
+
+        if sala_id is not None and aulas_turma and not mudou_disciplina:
+            c.execute(
+                "UPDATE alo_alocacaoHorarioSala SET idsal_sala = ? WHERE idtur_turma = ?",
+                (sala_id, turma_id))
+
+    aviso = None
+    if mudou_disciplina and aulas_turma:
+        aviso = ("As alocacoes da turma foram removidas; use \"Gerar grade\" "
+                 "para aloca-la novamente.")
+    return None, aviso
 
 
 def excluir_turma(turma_id):

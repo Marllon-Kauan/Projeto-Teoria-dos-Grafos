@@ -87,6 +87,7 @@ a{color:inherit}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.ativo{background:var(--accent-suave); border-color:var(--accent); color:var(--accent)}
 .btn.desabilitado{opacity:.45; cursor:not-allowed; pointer-events:none}
+.btn.pequeno{padding:4px 9px; font-size:12.5px}
 
 /* ---------------- Mensagens ---------------- */
 .avisos{padding:12px 22px 0}
@@ -193,10 +194,20 @@ a{color:inherit}
   cursor:pointer;
 }
 .link.perigo{color:var(--erro)}
+.link.mini{font-size:11.5px; font-weight:500}
 
 .formulario{display:grid; gap:0 14px; grid-template-columns:repeat(auto-fit, minmax(180px,1fr))}
 .formulario .largo{grid-column:1 / -1}
 .formulario .btn{justify-self:start}
+.ajuda{margin:6px 0 0; font-size:12px; color:var(--muted); line-height:1.4}
+.acoes-formulario{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+.acoes{display:flex; flex-wrap:wrap; gap:10px; align-items:center; white-space:nowrap}
+.acoes form{margin:0}
+
+/* selecao rapida dos horarios bloqueados (RH07) */
+.barra-bloqueios{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between}
+.acoes-grade{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+.dia-acoes{display:block; margin-top:2px; font-weight:400; white-space:nowrap}
 
 /* ---------------- 4) Grade horaria ---------------- */
 .barra-edicao{

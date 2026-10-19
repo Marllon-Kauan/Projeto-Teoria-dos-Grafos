@@ -21,7 +21,7 @@
     <div class="rolagem">
       <table class="catalogo">
         <thead>
-          <tr><th>Código</th><th>Disciplina</th><th>Turma</th><th>Professor</th><th>Período</th><th>Sala</th><th></th></tr>
+          <tr><th>Código</th><th>Disciplina</th><th>Turma</th><th>Professor</th><th>Período</th><th>Sala</th><th>Ações</th></tr>
         </thead>
         <tbody>
           {% for t in turmas %}
@@ -33,9 +33,13 @@
               <td>{% if t.periodo %}{{ t.periodo }}º{% else %}Eletiva{% endif %}</td>
               <td>{{ t.sala or '—' }}</td>
               <td>
-                <form method="post" action="{{ url_for('excluir_turma', turma_id=t.id) }}">
-                  <button class="link perigo" type="submit">Excluir</button>
-                </form>
+                <div class="acoes">
+                  <a class="link" href="{{ url_for('editar_turma', turma_id=t.id) }}">Editar</a>
+                  <form method="post" action="{{ url_for('excluir_turma', turma_id=t.id) }}"
+                        onsubmit="return confirm('Excluir a turma {{ t.turma }}? As aulas alocadas também serão removidas.');">
+                    <button class="link perigo" type="submit">Excluir</button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% else %}
@@ -59,7 +63,8 @@
       </div>
       <div class="campo">
         <label for="turma">Turma</label>
-        <input name="turma" id="turma" type="number" placeholder="2026101" required>
+        <input name="turma" id="turma" type="number" min="1" step="1"
+               inputmode="numeric" placeholder="2026101" required>
       </div>
       <div class="campo">
         <label for="prof">Professor</label>

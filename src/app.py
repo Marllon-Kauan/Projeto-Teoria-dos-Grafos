@@ -225,6 +225,70 @@ def turmas():
     )
 
 
+def _render_editar_turma(turma, valores):
+    salas_atuais = repo.salas_da_turma(turma["id"])
+    return render_template(
+        "editar_turma.html",
+        semestre=repo.semestre(),
+        turma=turma,
+        valores=valores,
+        disciplinas=repo.disciplinas(),
+        professores=repo.professores(),
+        salas=repo.salas(),
+        tem_alocacoes=bool(salas_atuais),
+        qtd_aulas=sum(1 for a in repo.aulas() if a["turma"] == turma["id"]),
+    )
+
+
+@app.route("/turmas/<int:turma_id>/editar", methods=["GET", "POST"])
+def editar_turma(turma_id):
+    """Edicao de turma (CT09): codigo, disciplina, professor e sala."""
+    turma = repo.buscar_turma(turma_id)
+    if turma is None:
+        flash("Turma não encontrada.", "erro")
+        return redirect(url_for("turmas"))
+
+    if request.method == "POST":
+        cod = request.form.get("cod")
+        codigo = (request.form.get("turma") or "").strip()
+        prof = request.form.get("prof")
+        sala_raw = (request.form.get("sala") or "").strip()
+        valores = {
+            "cod": cod or "", "turma": codigo,
+            "prof": prof or "", "sala": sala_raw,
+        }
+
+        if not (cod and codigo.isdigit() and prof):
+            flash("Preencha a disciplina, o professor e o código numérico da turma.", "erro")
+            return _render_editar_turma(turma, valores)
+        if sala_raw and not sala_raw.isdigit():
+            flash("Sala inválida.", "erro")
+            return _render_editar_turma(turma, valores)
+
+        erro, aviso = repo.atualizar_turma(
+            turma_id, cod, int(codigo), prof,
+            int(sala_raw) if sala_raw else None,
+        )
+        if erro:
+            flash(erro, "erro")
+            return _render_editar_turma(turma, valores)
+
+        mensagem = "Turma atualizada com sucesso."
+        if aviso:
+            mensagem += " " + aviso
+        flash(mensagem, "ok")
+        return redirect(url_for("turmas"))
+
+    salas_atuais = repo.salas_da_turma(turma_id)
+    valores = {
+        "cod": turma["cod"],
+        "turma": turma["turma"],
+        "prof": turma["prof"],
+        "sala": str(salas_atuais[0]["id"]) if len(salas_atuais) == 1 else "",
+    }
+    return _render_editar_turma(turma, valores)
+
+
 @app.route("/turmas/nova", methods=["POST"])
 def nova_turma():
     cod = request.form.get("cod")

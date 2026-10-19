@@ -29,7 +29,8 @@
               <td>{{ horarios[r.h] }}</td>
               <td>{{ r.motivo }}</td>
               <td>
-                <form method="post" action="{{ url_for('excluir_restricao', restricao_id=r.id) }}">
+                <form method="post" action="{{ url_for('excluir_restricao', restricao_id=r.id) }}"
+                      onsubmit="return confirm('Excluir esta restrição?');">
                   <button class="link perigo" type="submit">Excluir</button>
                 </form>
               </td>
@@ -64,7 +65,7 @@
         </select>
       </div>
       <div class="campo largo">
-        <label for="motivo">Motivo</label>
+        <label for="motivo">Motivo (opcional)</label>
         <input name="motivo" id="motivo" placeholder="Reunião de colegiado">
       </div>
       <button class="btn primary" type="submit">Adicionar restrição</button>
@@ -73,7 +74,7 @@
 
   <section class="painel">
     <div class="painel-head">
-      <h2>Aulas seguidas no mesmo dia</h2>
+      <h2>Aulas consecutivas no mesmo dia</h2>
       <span class="sub">Limite por professor, aplicado a cada turma dele</span>
     </div>
 
@@ -85,9 +86,10 @@
             {% for p in preferencias %}
               <tr>
                 <td>{{ p.prof }}</td>
-                <td>{% if p.max == 3 %}Não aceita 4 aulas seguidas{% else %}No máximo 2 seguidas{% endif %}</td>
+                <td>{% if p.max == 3 %}No máximo 3 aulas consecutivas{% else %}No máximo 2 aulas consecutivas{% endif %}</td>
                 <td>
-                  <form method="post" action="{{ url_for('excluir_preferencia', pro_id=p.prof_id) }}">
+                  <form method="post" action="{{ url_for('excluir_preferencia', pro_id=p.prof_id) }}"
+                        onsubmit="return confirm('Remover esta preferência de aulas consecutivas?');">
                     <button class="link perigo" type="submit">Remover</button>
                   </form>
                 </td>
@@ -106,10 +108,10 @@
         </select>
       </div>
       <div class="campo">
-        <label for="max_p">Limite</label>
+        <label for="max_p">Limite de aulas consecutivas</label>
         <select name="max" id="max_p" required>
-          <option value="3">Não aceita 4 aulas seguidas</option>
-          <option value="2">No máximo 2 seguidas</option>
+          <option value="3">No máximo 3 aulas consecutivas</option>
+          <option value="2">No máximo 2 aulas consecutivas</option>
         </select>
       </div>
       <button class="btn primary" type="submit">Salvar preferência</button>
@@ -132,13 +134,28 @@
     </nav>
     <form method="post" action="{{ url_for('salvar_bloqueios') }}">
       <input type="hidden" name="periodo" value="{{ periodo_bloqueio }}">
-      <div class="painel-body">
+      <div class="painel-body barra-bloqueios">
         <strong>Horários bloqueados para o {{ periodo_bloqueio }}º período</strong>
+        <span class="acoes-grade">
+          <button type="button" class="btn pequeno" data-bloq-acao="marcar">Marcar todos</button>
+          <button type="button" class="btn pequeno" data-bloq-acao="limpar">Limpar todos</button>
+        </span>
       </div>
       <div class="rolagem">
         <table class="catalogo">
           <thead>
-            <tr><th>Horário</th>{% for d in dias %}<th>{{ dias_longo[d] }}</th>{% endfor %}</tr>
+            <tr>
+              <th>Horário</th>
+              {% for d in dias %}
+                <th>
+                  {{ dias_longo[d] }}
+                  <span class="dia-acoes">
+                    <button type="button" class="link mini" data-bloq-dia="{{ d }}" data-bloq-modo="marcar">marcar</button>
+                    <button type="button" class="link mini" data-bloq-dia="{{ d }}" data-bloq-modo="limpar">limpar</button>
+                  </span>
+                </th>
+              {% endfor %}
+            </tr>
           </thead>
           <tbody>
             {% for faixa in horarios %}
@@ -147,7 +164,7 @@
                 <td>{{ faixa }}</td>
                 {% for d in dias %}
                   {% set hid = ids[(d, i)] %}
-                  <td><input type="checkbox" name="bloq" value="{{ hid }}"
+                  <td><input type="checkbox" name="bloq" value="{{ hid }}" data-dia="{{ d }}"
                              {% if hid in bloqueados %}checked{% endif %}
                              aria-label="Bloquear {{ dias_longo[d] }} {{ faixa }}"></td>
                 {% endfor %}
@@ -162,4 +179,8 @@
     </form>
   </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/restricoes.js') }}"></script>
 {% endblock %}
