@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block titulo %}Salas{% endblock %}
+
+{# ------------------------------------------------------------------
+   Contrato da tela (implementado no back-end Flask):
+
+   - "salas": lista de dicionários com id, bloco, numero, status
+     ("Disponível" ou "Indisponível") e motivo (texto opcional).
+   - "valores": dicionário {bloco, numero} com o que foi digitado, usado
+     para reexibir o formulário em caso de erro (UX-SA06).
+
+   As mensagens flash são exibidas por base.html nas categorias "ok" e
+   "erro".
+
+   A rota POST /salas recebe o campo "acao":
+     criar          -> bloco, numero
+     disponibilidade-> sala_id, status, motivo
+     excluir        -> sala_id
+   ------------------------------------------------------------------ #}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
+  <span class="sep"></span>
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+  <a class="btn ativo" href="{{ url_for('salas') }}" aria-current="page">Salas</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+{% set salas = salas|default([], true) %}
+{% set valores = valores|default({}, true) %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Salas de aula</h2>
+      <span class="sub">Bloco e número identificam a sala. Salas indisponíveis não são usadas ao gerar a grade.</span>
+    </div>
+
+    <div class="rolagem">
+      <table class="catalogo salas">
+        <thead>
+          <tr>
+            <th>Bloco</th>
+            <th>Número</th>
+            <th>Status</th>
+            <th>Motivo da indisponibilidade</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sala in salas %}
+            {% set status_sala = sala.get('status') %}
+            {% set status = status_sala if status_sala is not none and status_sala != '' else 'Disponível' %}
+            {% set status_norm = status|string|lower %}
+            {% set disponivel = status_norm in ('disponível', 'disponivel', 'true', '1', 'sim', 'available') %}
+            <tr>
+              <td>{{ sala.get('bloco', '') }}</td>
+              <td>{{ sala.get('numero', '') }}</td>
+              <td>
+                <span class="status {{ 'disponivel' if disponivel else 'indisponivel' }}">
+                  {{ 'Disponível' if disponivel else 'Indisponível' }}
+                </span>
+              </td>
+              <td class="motivo-sala">{{ sala.get('motivo') or '—' }}</td>
+              <td>
+                <div class="acoes-sala">
+                  <form class="form-disponibilidade" method="post" action="">
+                    <input type="hidden" name="acao" value="disponibilidade">
+                    <input type="hidden" name="sala_id" value="{{ sala.get('id', '') }}">
+                    <select name="status" data-sala-status="{{ sala.get('id', '') }}"
+                            aria-label="Status da sala {{ sala.get('bloco', '') }}-{{ sala.get('numero', '') }}">
+                      <option value="Disponível" {% if disponivel %}selected{% endif %}>Disponível</option>
+                      <option value="Indisponível" {% if not disponivel %}selected{% endif %}>Indisponível</option>
+                    </select>
+                    <input name="motivo" value="{{ sala.get('motivo') or '' }}"
+                           data-sala-motivo="{{ sala.get('id', '') }}"
+                           placeholder="Motivo (opcional)"
+                           aria-label="Motivo da indisponibilidade da sala {{ sala.get('bloco', '') }}-{{ sala.get('numero', '') }}">
+                    <button class="btn pequeno" type="submit">Salvar</button>
+                  </form>
+
+                  <form method="post" action=""
+                        onsubmit="return confirm('Excluir a sala {{ sala.get('bloco', '') }}-{{ sala.get('numero', '') }}?');">
+                    <input type="hidden" name="acao" value="excluir">
+                    <input type="hidden" name="sala_id" value="{{ sala.get('id', '') }}">
+                    <button class="link perigo" type="submit">Excluir</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5" class="vazio">
+                <strong>Nenhuma sala cadastrada.</strong>
+                Cadastre a primeira sala no formulário abaixo.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Cadastrar sala</h2>
+      <span class="sub">Bloco e número são obrigatórios. A sala é criada como Disponível.</span>
+    </div>
+    <form class="painel-body formulario" method="post" action="">
+      <input type="hidden" name="acao" value="criar">
+      <div class="campo">
+        <label for="bloco">Código do bloco <span class="obrigatorio">*</span></label>
+        <input name="bloco" id="bloco" maxlength="20" pattern="[A-Za-z]+"
+               title="Use apenas letras, por exemplo I ou K." required
+               placeholder="Ex.: I" value="{{ valores.get('bloco', '') }}">
+      </div>
+      <div class="campo">
+        <label for="numero">Número da sala <span class="obrigatorio">*</span></label>
+        <input name="numero" id="numero" type="number" min="1" step="1" inputmode="numeric"
+               required placeholder="Ex.: 12" value="{{ valores.get('numero', '') }}">
+      </div>
+      <button class="btn primary" type="submit">Cadastrar sala</button>
+      <p class="ajuda largo"><span class="obrigatorio">*</span> Campos obrigatórios.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/salas.js') }}"></script>
+{% endblock %}

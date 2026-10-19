@@ -204,6 +204,46 @@ a{color:inherit}
 .acoes{display:flex; flex-wrap:wrap; gap:10px; align-items:center; white-space:nowrap}
 .acoes form{margin:0}
 
+/* ---------------- Salas de aula ---------------- */
+.catalogo.salas{min-width:860px}
+.status{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 9px;
+  border:1px solid transparent;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
+}
+.status::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor}
+.status.disponivel{background:var(--accent-suave); border-color:var(--accent); color:var(--accent)}
+.status.indisponivel{background:var(--alerta-suave); border-color:var(--alerta); color:var(--alerta)}
+.motivo-sala{color:var(--muted)}
+.obrigatorio{color:var(--erro); font-weight:700}
+.acoes-sala{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.acoes-sala form{margin:0}
+.form-disponibilidade{display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+.form-disponibilidade select,
+.form-disponibilidade input{
+  min-width:0;
+  padding:5px 8px;
+  border:1px solid var(--line-forte);
+  border-radius:7px;
+  background:var(--card);
+  color:inherit;
+  font:inherit;
+  font-size:12.5px;
+}
+.form-disponibilidade select{max-width:150px}
+.form-disponibilidade input{width:170px}
+.form-disponibilidade input[hidden]{display:none}
+
+@media (max-width:760px){
+  .form-disponibilidade select,
+  .form-disponibilidade input{width:100%; max-width:none}
+}
+
 /* selecao rapida dos horarios bloqueados (RH07) */
 .barra-bloqueios{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between}
 .acoes-grade{display:flex; flex-wrap:wrap; gap:6px; align-items:center}

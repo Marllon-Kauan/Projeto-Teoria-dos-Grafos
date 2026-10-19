@@ -251,14 +251,16 @@ def editar_turma(turma_id):
         codigo = (request.form.get("turma") or "").strip()
         prof = request.form.get("prof")
         sala_raw = (request.form.get("sala") or "").strip()
+        
         valores = {
             "cod": cod or "", "turma": codigo,
             "prof": prof or "", "sala": sala_raw,
         }
 
-        if not (cod and codigo.isdigit() and prof):
-            flash("Preencha a disciplina, o professor e o código numérico da turma.", "erro")
+        if not (cod and codigo.isdigit() and len(codigo) == 2 and prof):
+            flash("Preencha a disciplina, o professor e um código numérico de exatamente 2 dígitos para a turma (ex: 10, 02).", "erro")
             return _render_editar_turma(turma, valores)
+            
         if sala_raw and not sala_raw.isdigit():
             flash("Sala inválida.", "erro")
             return _render_editar_turma(turma, valores)
@@ -293,8 +295,9 @@ def nova_turma():
     codigo = (request.form.get("turma") or "").strip()
     prof = request.form.get("prof")
 
-    if not (cod and codigo.isdigit() and prof):
-        flash("Preencha a disciplina, o professor e o código numérico da turma.", "erro")
+    #Exige que o código tenha exatamente 2 dígitos numéricos
+    if not (cod and codigo.isdigit() and len(codigo) == 2 and prof):
+        flash("Preencha a disciplina, o professor e um código numérico de exatamente 2 dígitos para a turma (ex: 10, 02).", "erro")
         return redirect(url_for("turmas"))
 
     erro = repo.criar_turma(cod, int(codigo), prof)
@@ -310,6 +313,71 @@ def excluir_turma(turma_id):
     repo.excluir_turma(turma_id)
     flash("Turma excluída junto com as aulas associadas à mesma.", "ok")
     return redirect(url_for("turmas"))
+
+
+def _render_salas(valores=None):
+    return render_template(
+        "salas.html",
+        semestre=repo.semestre(),
+        salas=repo.salas(),
+        valores=valores or {},
+    )
+
+
+@app.route("/salas", methods=["GET", "POST"])
+def salas():
+    """Cadastro, disponibilidade e exclusao das salas de aula."""
+    if request.method == "POST":
+        acao = request.form.get("acao")
+
+        if acao == "criar":
+            bloco = (request.form.get("bloco") or "").strip()
+            numero = (request.form.get("numero") or "").strip()
+            valores = {"bloco": bloco, "numero": numero}
+            if (not bloco.isalpha() or len(bloco) > 20
+                    or not numero.isdigit() or int(numero) <= 0):
+                flash("Informe um bloco com letras e um número de sala maior que zero.", "erro")
+                return _render_salas(valores)
+            erro = repo.criar_sala(bloco, int(numero))
+            if erro:
+                flash(erro, "erro")
+                return _render_salas(valores)
+            flash("Sala %s-%s cadastrada." % (bloco.upper(), int(numero)), "ok")
+            return redirect(url_for("salas"))
+
+        if acao == "disponibilidade":
+            sala_id = request.form.get("sala_id", "")
+            status = request.form.get("status")
+            motivo = (request.form.get("motivo") or "").strip()
+            if (not sala_id.isdigit()
+                    or status not in (repo.STATUS_DISPONIVEL, repo.STATUS_INDISPONIVEL)):
+                flash("Não foi possível alterar a disponibilidade: dados inválidos.", "erro")
+                return redirect(url_for("salas"))
+            erro = repo.atualizar_disponibilidade_sala(int(sala_id), status, motivo)
+            if erro:
+                flash(erro, "erro")
+            elif status == repo.STATUS_INDISPONIVEL:
+                flash("Sala marcada como indisponível.", "ok")
+            else:
+                flash("Sala marcada como disponível. O motivo anterior foi removido.", "ok")
+            return redirect(url_for("salas"))
+
+        if acao == "excluir":
+            sala_id = request.form.get("sala_id", "")
+            if not sala_id.isdigit():
+                flash("Não foi possível excluir: sala inválida.", "erro")
+                return redirect(url_for("salas"))
+            erro = repo.excluir_sala(int(sala_id))
+            if erro:
+                flash(erro, "erro")
+            else:
+                flash("Sala excluída.", "ok")
+            return redirect(url_for("salas"))
+
+        flash("Ação inválida para a tela de salas.", "erro")
+        return redirect(url_for("salas"))
+
+    return _render_salas()
 
 
 @app.route("/restricoes")

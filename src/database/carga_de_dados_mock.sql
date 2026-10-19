@@ -1,7 +1,9 @@
 CREATE TABLE sal_sala (
     sal_id INT PRIMARY KEY,
     sal_bloco VARCHAR(20),
-    sal_numero INT
+    sal_numero INT,
+    sal_status VARCHAR(20) NOT NULL DEFAULT 'Disponível',
+    sal_motivo VARCHAR(200)
 );
  
 CREATE TABLE pro_professor (
@@ -266,23 +268,23 @@ INSERT INTO dis_disciplina (dis_id, dis_nome, dis_codigo, dis_eletiva, dis_carga
 
 INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) VALUES
 -- === 1º PERÍODO (Disciplinas 9 e 10) ===
-(1, 2026101, 1, 9, 2), 
-(2, 2026102, 2, 10, 2),
+(1, 10, 1, 9, 2), 
+(2, 11, 2, 10, 2),
 
 -- === 2º PERÍODO (Disciplina 11) ===
-(3, 2026201, 3, 11, 2), 
-(4, 2026202, 1, 11, 2), 
+(3, 20, 3, 11, 2), 
+(4, 21, 1, 11, 2), 
 
 -- === 3º PERÍODO (Disciplinas 12, 13 e 14) ===
-(5, 2026301, 4, 12, 2),
-(6, 2026302, 5, 13, 2),
-(7, 2026303, 2, 14, 2), 
+(5, 30, 4, 12, 2),
+(6, 31, 5, 13, 2),
+(7, 32, 2, 14, 2), 
 
 -- === 4º PERÍODO (Disciplinas 4, 15 e 16) ===
-(8, 2026401, 6, 4, 2),
-(9, 2026402, 7, 15, 2),
-(10, 2026403, 3, 16, 2), 
+(8, 40, 6, 4, 2),
+(9, 41, 7, 15, 2),
+(10, 42, 3, 16, 2), 
 
 -- === PERÍODOS SUPERIORES  ===
-(11, 2026801, 8, 6, 2), 
-(12, 2026901, 9, 1, 2); 
+(11, 80, 8, 6, 2), 
+(12, 90, 9, 1, 2);

@@ -7,6 +7,7 @@
   <span class="sep"></span>
   <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
   <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+  <a class="btn" href="{{ url_for('salas') }}">Salas</a>
 </nav>
 {% endblock %}
 
@@ -14,7 +15,7 @@
 <div class="pagina">
   <section class="painel">
     <div class="painel-head">
-      <h2>Turma {{ turma.turma }}</h2>
+      <h2>Turma {{ "%02d" | format(turma.turma|int) }}</h2>
       <span class="sub">Semestre {{ semestre }}</span>
     </div>
     <div class="rolagem">
@@ -62,8 +63,9 @@
 
       <div class="campo">
         <label for="turma">Turma</label>
-        <input name="turma" id="turma" type="number" min="1" step="1"
-               inputmode="numeric" value="{{ valores.turma }}" required>
+        <input name="turma" id="turma" type="text" pattern="\d{2}" maxlength="2"
+               inputmode="numeric" value="{{ '%02d' | format(valores.turma|int) }}" 
+               title="O código da turma deve ter exatamente 2 dígitos (ex: 10, 02)." required>
       </div>
 
       <div class="campo">

@@ -1,7 +1,9 @@
 CREATE TABLE sal_sala (
     sal_id INT PRIMARY KEY,
     sal_bloco VARCHAR(20),
-    sal_numero INT
+    sal_numero INT,
+    sal_status VARCHAR(20) NOT NULL DEFAULT 'Disponível',
+    sal_motivo VARCHAR(200)
 );
  
 CREATE TABLE pro_professor (

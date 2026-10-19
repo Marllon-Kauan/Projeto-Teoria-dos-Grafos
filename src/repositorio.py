@@ -37,6 +37,10 @@ HORARIOS_DO_FRONT = [(d, SLOTS[i]) for d in range(2, 8) for i in range(7)]
 PERIODOS = list(range(1, 11))
 PERIODOS_BLOQUEAVEIS = (1, 2, 3, 4)   # mesma regra do builder.py
 
+# Status de disponibilidade das salas (SA04/SA06).
+STATUS_DISPONIVEL = "Disponível"
+STATUS_INDISPONIVEL = "Indisponível"
+
 
 # ---------------------------------------------------------------- conexao
 
@@ -53,8 +57,10 @@ def conexao():
 
 def garantir_esquema():
     """
-    Confere que o banco foi criado (setup_db.py) e cria as duas tabelas novas
-    usadas pelo front: restricoes de professor e horarios bloqueados.
+    Confere que o banco foi criado (setup_db.py), cria as duas tabelas novas
+    usadas pelo front (restricoes de professor e horarios bloqueados) e
+    acrescenta as colunas de disponibilidade da tabela sal_sala, se faltarem.
+    A migracao nao apaga nem recria os dados existentes.
     """
     with conexao() as c:
         existentes = {r[0] for r in c.execute(
@@ -62,6 +68,15 @@ def garantir_esquema():
         if "hor_horario" not in existentes:
             raise RuntimeError(
                 "Banco sem tabelas em %s. Rode primeiro: python setup_db.py" % DB_PATH)
+        # Migracao compativel com bancos antigos: acrescenta status e motivo
+        # das salas sem apagar os dados existentes.
+        if "sal_sala" in existentes:
+            colunas_sala = {r[1] for r in c.execute("PRAGMA table_info(sal_sala)")}
+            if "sal_status" not in colunas_sala:
+                c.execute("ALTER TABLE sal_sala ADD COLUMN sal_status TEXT NOT NULL "
+                          "DEFAULT '%s'" % STATUS_DISPONIVEL)
+            if "sal_motivo" not in colunas_sala:
+                c.execute("ALTER TABLE sal_sala ADD COLUMN sal_motivo TEXT")
         for dia, slot in HORARIOS_DO_FRONT:
             if not c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?",
                              (dia, slot)).fetchone():
@@ -220,13 +235,19 @@ def buscar_turma(turma_id):
 
 
 def salas():
-    """Salas cadastradas, para o seletor de edicao da turma."""
+    """Salas cadastradas, com status e motivo, para a tela de salas."""
     with conexao() as c:
         linhas = c.execute(
-            "SELECT sal_id, sal_bloco, sal_numero FROM sal_sala "
-            "ORDER BY sal_bloco, sal_numero").fetchall()
-    return [{"id": r["sal_id"], "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"])}
-            for r in linhas]
+            "SELECT sal_id, sal_bloco, sal_numero, sal_status, sal_motivo "
+            "FROM sal_sala ORDER BY sal_bloco, sal_numero").fetchall()
+    return [{
+        "id": r["sal_id"],
+        "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"]),
+        "bloco": r["sal_bloco"],
+        "numero": r["sal_numero"],
+        "status": r["sal_status"] or STATUS_DISPONIVEL,
+        "motivo": r["sal_motivo"],
+    } for r in linhas]
 
 
 def salas_da_turma(turma_id):
@@ -326,11 +347,11 @@ def criar_turma(cod_disciplina, codigo_turma, prof_nome):
     dis = disciplinas().get(cod_disciplina)
     pro_id = _prof_id(prof_nome)
     if dis is None or pro_id is None:
-        return "Disciplina ou professor invalido."
+        return "Disciplina ou professor inválido."
     with conexao() as c:
         if c.execute("SELECT 1 FROM tur_turma WHERE tur_codigo = ? AND idsem_semestre = ?",
                      (codigo_turma, SEMESTRE_ID)).fetchone():
-            return "Ja existe uma turma com o codigo %s neste semestre." % codigo_turma
+            return "Já existe uma turma com o código %s neste semestre." % codigo_turma
         novo = (c.execute("SELECT MAX(tur_id) FROM tur_turma").fetchone()[0] or 0) + 1
         c.execute(
             "INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) "
@@ -350,14 +371,14 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
     """
     atual = buscar_turma(turma_id)
     if atual is None:
-        return "Turma nao encontrada.", None
+        return "Turma não encontrada.", None
 
     dis = disciplinas().get(cod_disciplina)
     pro_id = _prof_id(prof_nome)
     if dis is None or pro_id is None:
-        return "Disciplina ou professor invalido.", None
+        return "Disciplina ou professor inválido.", None
     if not isinstance(codigo_turma, int) or codigo_turma <= 0:
-        return "Codigo da turma invalido.", None
+        return "Código da turma inválido.", None
 
     mudou_disciplina = dis["id"] != atual["dis_id"]
     mudou_professor = pro_id != atual["prof_id"]
@@ -373,19 +394,19 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
             quando = ("%s, %s" % (DIAS_LONGO[pos[0]], horarios()[pos[1]])
                       if pos else "o horario atual")
             if aula["hor_id"] in restritas:
-                return ("O professor %s tem restricao em %s." % (prof_nome, quando), None)
+                return ("O professor %s tem restrição em %s." % (prof_nome, quando), None)
             for outra in outras_aulas:
                 if outra["hor_id"] != aula["hor_id"]:
                     continue
                 t2 = turmas_por_id.get(outra["turma"])
                 if t2 is not None and t2["prof_id"] == pro_id:
-                    return ("O professor %s ja tem aula em %s." % (prof_nome, quando), None)
+                    return ("O professor %s já tem aula em %s." % (prof_nome, quando), None)
 
     # Nova sala: precisa existir e estar livre em todos os horarios da turma.
     if sala_id is not None:
         salas_validas = {s["id"]: s["nome"] for s in salas()}
         if sala_id not in salas_validas:
-            return "Sala invalida.", None
+            return "Sala inválida.", None
         if aulas_turma and not mudou_disciplina:
             for aula in aulas_turma:
                 for outra in outras_aulas:
@@ -393,7 +414,7 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
                         pos = dia_h(aula["hor_id"])
                         quando = ("%s, %s" % (DIAS_LONGO[pos[0]], horarios()[pos[1]])
                                   if pos else "o horario atual")
-                        return ("A sala %s ja esta ocupada em %s."
+                        return ("A sala %s já está ocupada em %s."
                                 % (salas_validas[sala_id], quando), None)
 
     with conexao() as c:
@@ -401,7 +422,7 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
             "SELECT 1 FROM tur_turma WHERE tur_codigo = ? AND idsem_semestre = ? AND tur_id <> ?",
             (codigo_turma, SEMESTRE_ID, turma_id)).fetchone()
         if duplicada:
-            return ("Ja existe uma turma com o codigo %s neste semestre."
+            return ("Já existe uma turma com o código %s neste semestre."
                     % codigo_turma, None)
 
         if mudou_disciplina:
@@ -428,6 +449,67 @@ def excluir_turma(turma_id):
     with conexao() as c:
         c.execute("DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma = ?", (turma_id,))
         c.execute("DELETE FROM tur_turma WHERE tur_id = ?", (turma_id,))
+
+
+def criar_sala(bloco, numero):
+    """Cadastra uma sala. Retorna None ou a mensagem de erro."""
+    bloco = (bloco or "").strip().upper()
+    if not bloco or len(bloco) > 20:
+        return "Informe o bloco e o número da sala."
+    try:
+        numero = int(numero)
+    except (TypeError, ValueError):
+        return "Número de sala inválido."
+    # 999999999 evita estourar o inteiro do SQLite e mantem a numeracao
+    # dentro de um limite plausivel para salas.
+    if numero <= 0 or numero > 999999999:
+        return "Número de sala inválido."
+    with conexao() as c:
+        existente = c.execute(
+            "SELECT 1 FROM sal_sala WHERE UPPER(sal_bloco) = ? AND sal_numero = ?",
+            (bloco, numero)).fetchone()
+        if existente:
+            return "Já existe uma sala com o bloco %s e o número %s." % (bloco, numero)
+        novo = (c.execute("SELECT MAX(sal_id) FROM sal_sala").fetchone()[0] or 0) + 1
+        c.execute(
+            "INSERT INTO sal_sala (sal_id, sal_bloco, sal_numero, sal_status, sal_motivo) "
+            "VALUES (?, ?, ?, ?, NULL)",
+            (novo, bloco, numero, STATUS_DISPONIVEL))
+    return None
+
+
+def atualizar_disponibilidade_sala(sala_id, status, motivo=None):
+    """Atualiza status e motivo. Retorna None ou a mensagem de erro."""
+    if status not in (STATUS_DISPONIVEL, STATUS_INDISPONIVEL):
+        return "Status de sala inválido."
+    motivo = (motivo or "").strip()
+    if status == STATUS_DISPONIVEL:
+        motivo = None          # SA05: ao ficar disponível, o motivo é limpo.
+    else:
+        motivo = motivo or None
+    with conexao() as c:
+        cursor = c.execute(
+            "UPDATE sal_sala SET sal_status = ?, sal_motivo = ? WHERE sal_id = ?",
+            (status, motivo, sala_id))
+        if cursor.rowcount == 0:
+            return "Sala não encontrada."
+    return None
+
+
+def excluir_sala(sala_id):
+    """Exclui a sala se não houver alocações. Retorna None ou a mensagem de erro."""
+    with conexao() as c:
+        if not c.execute("SELECT 1 FROM sal_sala WHERE sal_id = ?",
+                         (sala_id,)).fetchone():
+            return "Sala não encontrada."
+        em_uso = c.execute(
+            "SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idsal_sala = ?",
+            (sala_id,)).fetchone()[0]
+        if em_uso:
+            return ("Não é possível excluir: a sala possui %d aula(s) alocada(s)."
+                    % em_uso)
+        c.execute("DELETE FROM sal_sala WHERE sal_id = ?", (sala_id,))
+    return None
 
 
 def criar_restricao(prof_nome, dia, h, motivo):

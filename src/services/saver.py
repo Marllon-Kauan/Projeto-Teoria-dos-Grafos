@@ -10,8 +10,11 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    #Busca todas as salas cadastradas.
-    cursor.execute("SELECT sal_id, sal_bloco, sal_numero FROM sal_sala ORDER BY sal_id") 
+    #Busca as salas disponíveis (SA06: indisponíveis não entram na geração).
+    cursor.execute(
+        "SELECT sal_id, sal_bloco, sal_numero FROM sal_sala "
+        "WHERE sal_status = ? ORDER BY sal_id",
+        ("Disponível",))
     salas_disponiveis = cursor.fetchall()
     
     #Busca qual o maior ID atual na tabela de alocação para não haver duplicidade de chave primária.
@@ -67,17 +70,20 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
             #Registra que a turma ficou sem sala (sem sala viável).
             turmas_sem_sala.append(turma)
             
-    #Salva a grade no banco com o que conseguiu alocar (mesmo sendo parcial)
-    cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
-    
-    #Salva a nova grade
-    for alocacao in novas_alocacoes:
-        cursor.execute(
-            "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
-            alocacao
-        )
-    #Efetiva as mudanças
-    conn.commit()
+    # Só altera o banco se todas as turmas tiverem conseguido sala.
+    if not turmas_sem_sala:
+        # Exclui os registros anteriores apenas quando a nova grade está completa.
+        cursor.execute("DELETE FROM alo_alocacaoHorarioSala")
+
+        # Salva a nova grade completa.
+        for alocacao in novas_alocacoes:
+            cursor.execute(
+                "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
+                alocacao
+            )
+
+        # Efetiva as mudanças.
+        conn.commit()
     conn.close()
     
     #Retorna as turmas que falharam em conseguir sala
