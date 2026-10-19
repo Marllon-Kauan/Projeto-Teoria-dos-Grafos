@@ -68,8 +68,7 @@ def garantir_esquema():
         if "hor_horario" not in existentes:
             raise RuntimeError(
                 "Banco sem tabelas em %s. Rode primeiro: python setup_db.py" % DB_PATH)
-        # Migracao compativel com bancos antigos: acrescenta status e motivo
-        # das salas sem apagar os dados existentes.
+        
         if "sal_sala" in existentes:
             colunas_sala = {r[1] for r in c.execute("PRAGMA table_info(sal_sala)")}
             if "sal_status" not in colunas_sala:
@@ -77,6 +76,7 @@ def garantir_esquema():
                           "DEFAULT '%s'" % STATUS_DISPONIVEL)
             if "sal_motivo" not in colunas_sala:
                 c.execute("ALTER TABLE sal_sala ADD COLUMN sal_motivo TEXT")
+                
         for dia, slot in HORARIOS_DO_FRONT:
             if not c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?",
                              (dia, slot)).fetchone():
@@ -85,44 +85,87 @@ def garantir_esquema():
                 c.execute(
                     "INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) "
                     "VALUES (?, ?, ?, ?, ?)", (novo, dia, slot, ini, fim))
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS res_restricao (
-                res_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                idpro_professor INT NOT NULL,
-                idhor_horario INT NOT NULL,
-                res_motivo VARCHAR(200)
-            )""")
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS pre_preferencia (
-                idpro_professor INT PRIMARY KEY,
-                pre_maxSeguidas INT NOT NULL
-            )""")
+
+        #Tabela de restrições.
+        if "res_restricao" not in existentes:
+            c.execute("""
+                CREATE TABLE res_restricao (
+                    res_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    idpro_professor INT NOT NULL,
+                    idhor_horario INT NOT NULL,
+                    idsem_semestre INT NOT NULL,
+                    res_motivo VARCHAR(200)
+                )""")
+        else:
+            colunas_res = {r[1] for r in c.execute("PRAGMA table_info(res_restricao)")}
+            if "idsem_semestre" not in colunas_res:
+                c.execute("ALTER TABLE res_restricao ADD COLUMN idsem_semestre INT NOT NULL DEFAULT 1")
+
+        #Tabela de preferências.
+        if "pre_preferencia" not in existentes:
+            c.execute("""
+                CREATE TABLE pre_preferencia (
+                    idpro_professor INT,
+                    idsem_semestre INT,
+                    pre_maxSeguidas INT NOT NULL,
+                    pre_maxDiarias INT NOT NULL,
+                    PRIMARY KEY (idpro_professor, idsem_semestre)
+                )""")
+        else:
+            colunas_pre = {r[1] for r in c.execute("PRAGMA table_info(pre_preferencia)")}
+            if "idsem_semestre" not in colunas_pre or "pre_maxDiarias" not in colunas_pre:
+                c.execute("ALTER TABLE pre_preferencia RENAME TO pre_preferencia_antigo")
+                c.execute("""
+                    CREATE TABLE pre_preferencia (
+                        idpro_professor INT,
+                        idsem_semestre INT,
+                        pre_maxSeguidas INT NOT NULL,
+                        pre_maxDiarias INT NOT NULL,
+                        PRIMARY KEY (idpro_professor, idsem_semestre)
+                    )""")
+                c.execute("""
+                    INSERT INTO pre_preferencia (idpro_professor, idsem_semestre, pre_maxSeguidas, pre_maxDiarias)
+                    SELECT idpro_professor, 1, pre_maxSeguidas, 4
+                    FROM pre_preferencia_antigo
+                """)
+                c.execute("DROP TABLE pre_preferencia_antigo")
+
+        #Tabela de bloqueios.
         if "blq_bloqueio" not in existentes:
             c.execute("""
                 CREATE TABLE blq_bloqueio (
                     idper_periodo INT NOT NULL,
                     idhor_horario INT NOT NULL,
-                    PRIMARY KEY (idper_periodo, idhor_horario)
+                    idsem_semestre INT NOT NULL,
+                    PRIMARY KEY (idper_periodo, idhor_horario, idsem_semestre)
                 )""")
         else:
             colunas_bloqueio = {r[1] for r in c.execute("PRAGMA table_info(blq_bloqueio)")}
-            if "idper_periodo" not in colunas_bloqueio:
-                # Mantem a configuracao global anterior replicando-a nos periodos 1 a 4.
+            if "idsem_semestre" not in colunas_bloqueio:
                 c.execute("ALTER TABLE blq_bloqueio RENAME TO blq_bloqueio_antigo")
                 c.execute("""
                     CREATE TABLE blq_bloqueio (
                         idper_periodo INT NOT NULL,
                         idhor_horario INT NOT NULL,
-                        PRIMARY KEY (idper_periodo, idhor_horario)
+                        idsem_semestre INT NOT NULL,
+                        PRIMARY KEY (idper_periodo, idhor_horario, idsem_semestre)
                     )""")
-                c.execute("""
-                    INSERT INTO blq_bloqueio (idper_periodo, idhor_horario)
-                    SELECT periodo.idper_periodo, antigo.idhor_horario
-                    FROM blq_bloqueio_antigo AS antigo
-                    CROSS JOIN (
-                        SELECT 1 AS idper_periodo UNION ALL SELECT 2
-                        UNION ALL SELECT 3 UNION ALL SELECT 4
-                    ) AS periodo
+                
+                if "idper_periodo" not in colunas_bloqueio:
+                    c.execute("""
+                        INSERT INTO blq_bloqueio (idper_periodo, idhor_horario, idsem_semestre)
+                        SELECT periodo.idper_periodo, antigo.idhor_horario, 1
+                        FROM blq_bloqueio_antigo AS antigo
+                        CROSS JOIN (
+                            SELECT 1 AS idper_periodo UNION ALL SELECT 2
+                            UNION ALL SELECT 3 UNION ALL SELECT 4
+                        ) AS periodo
+                    """)
+                else:
+                    c.execute("""
+                        INSERT INTO blq_bloqueio (idper_periodo, idhor_horario, idsem_semestre)
+                        SELECT idper_periodo, idhor_horario, 1
+                        FROM blq_bloqueio_antigo
                     """)
                 c.execute("DROP TABLE blq_bloqueio_antigo")
 
@@ -293,16 +336,15 @@ def restricoes():
             SELECT R.res_id, R.idpro_professor, R.idhor_horario, R.res_motivo, P.pro_nome
             FROM res_restricao R
             JOIN pro_professor P ON P.pro_id = R.idpro_professor
-            ORDER BY P.pro_nome, R.idhor_horario""").fetchall()
+            WHERE R.idsem_semestre = ?
+            ORDER BY P.pro_nome, R.idhor_horario""", (SEMESTRE_ID,)).fetchall()
     resultado = []
     for r in linhas:
         pos = dia_h(r["idhor_horario"])
-        if pos is None:
-            continue
+        if pos is None: continue
         resultado.append({
             "id": r["res_id"], "prof": r["pro_nome"], "prof_id": r["idpro_professor"],
-            "dia": pos[0], "h": pos[1], "hor_id": r["idhor_horario"],
-            "motivo": r["res_motivo"],
+            "dia": pos[0], "h": pos[1], "hor_id": r["idhor_horario"], "motivo": r["res_motivo"],
         })
     return resultado
 
@@ -316,14 +358,17 @@ def restricoes_por_professor():
 
 
 def preferencias():
-    """Limite de aulas seguidas no mesmo dia, por professor."""
+    #Limite de aulas seguidas no mesmo dia, por professor.
     with conexao() as c:
         linhas = c.execute("""
-            SELECT P.pro_id, P.pro_nome, F.pre_maxSeguidas
+            SELECT P.pro_id, P.pro_nome, F.pre_maxSeguidas, F.pre_maxDiarias
             FROM pre_preferencia F JOIN pro_professor P ON P.pro_id = F.idpro_professor
-            ORDER BY P.pro_nome""").fetchall()
-    return [{"prof_id": r[0], "prof": r[1], "max": r[2]} for r in linhas]
+            WHERE F.idsem_semestre = ?
+            ORDER BY P.pro_nome""", (SEMESTRE_ID,)).fetchall()
+    return [{"prof_id": r[0], "prof": r[1], "max_seg": r[2], "max_dia": r[3]} for r in linhas]
 
+def limites_por_professor():
+    return {p["prof_id"]: {"seguidas": p["max_seg"], "diarias": p["max_dia"]} for p in preferencias()}
 
 def max_seguidas_por_professor():
     """{pro_id: n} no formato que o builder.py recebe."""
@@ -331,12 +376,11 @@ def max_seguidas_por_professor():
 
 
 def bloqueados_por_periodo():
-    """{periodo: {hor_id, ...}} com os bloqueios de cada periodo basico."""
+    #{periodo: {hor_id, ...}} com os bloqueios de cada periodo basico.
     resultado = {periodo: set() for periodo in PERIODOS_BLOQUEAVEIS}
     with conexao() as c:
-        for r in c.execute("SELECT idper_periodo, idhor_horario FROM blq_bloqueio"):
-            if r[0] in resultado:
-                resultado[r[0]].add(r[1])
+        for r in c.execute("SELECT idper_periodo, idhor_horario FROM blq_bloqueio WHERE idsem_semestre = ?", (SEMESTRE_ID,)):
+            if r[0] in resultado: resultado[r[0]].add(r[1])
     return resultado
 
 
@@ -512,46 +556,55 @@ def excluir_sala(sala_id):
     return None
 
 
-def criar_restricao(prof_nome, dia, h, motivo):
+def criar_restricao(prof_nome, dia, h_val, motivo):
     pro_id = _prof_id(prof_nome)
-    hid = hor_id(dia, h)
-    if pro_id is None or hid is None:
+    if pro_id is None:
         return "erro"
-    with conexao() as c:
-        #Verifica se já existe uma restrição para esse professor nesse horário.
-        existente = c.execute(
-            "SELECT 1 FROM res_restricao WHERE idpro_professor = ? AND idhor_horario = ?", 
-            (pro_id, hid)
-        ).fetchone()
-        
-        if existente:
-            #Se já existe, atualiza o motivo e avisa ao app.py que foi uma atualização.
-            c.execute(
-                "UPDATE res_restricao SET res_motivo = ? WHERE idpro_professor = ? AND idhor_horario = ?",
-                (motivo, pro_id, hid)
-            )
-            return "atualizado"
-        else:
-            #Se não existe, cria a nova restrição e avisa ao app.py que foi uma criação.
-            c.execute(
-                "INSERT INTO res_restricao (idpro_professor, idhor_horario, res_motivo) VALUES (?, ?, ?)",
-                (pro_id, hid, motivo)
-            )
-            return "criado"
 
+    if h_val == "todos":
+        hids = [hor_id(dia, i) for i in range(7)]
+    else:
+        hids = [hor_id(dia, int(h_val))]
+        
+    status_final = "criado"
+    
+    with conexao() as c:
+        for hid in hids:
+            if hid is None:
+                continue
+                
+            #Verifica se já existe uma restrição para esse professor nesse horário e semestre.
+            existente = c.execute(
+                "SELECT 1 FROM res_restricao WHERE idpro_professor = ? AND idhor_horario = ? AND idsem_semestre = ?", 
+                (pro_id, hid, SEMESTRE_ID)
+            ).fetchone()
+            
+            if existente:
+                #Se já existe, atualiza o motivo para evitar duplicidade.
+                c.execute(
+                    "UPDATE res_restricao SET res_motivo = ? WHERE idpro_professor = ? AND idhor_horario = ? AND idsem_semestre = ?",
+                    (motivo, pro_id, hid, SEMESTRE_ID)
+                )
+                status_final = "atualizado"
+            else:
+                #Se não existe, cria a nova restrição.
+                c.execute(
+                    "INSERT INTO res_restricao (idpro_professor, idhor_horario, idsem_semestre, res_motivo) VALUES (?, ?, ?, ?)",
+                    (pro_id, hid, SEMESTRE_ID, motivo)
+                )
+                
+    return status_final
 
 def excluir_restricao(restricao_id):
     with conexao() as c:
         c.execute("DELETE FROM res_restricao WHERE res_id = ?", (restricao_id,))
 
 
-def salvar_preferencia(prof_nome, maximo):
+def salvar_preferencia(prof_nome, max_seg, max_dia):
     pro_id = _prof_id(prof_nome)
-    if pro_id is None:
-        return False
+    if pro_id is None: return False
     with conexao() as c:
-        c.execute("INSERT OR REPLACE INTO pre_preferencia (idpro_professor, pre_maxSeguidas) VALUES (?, ?)",
-                  (pro_id, maximo))
+        c.execute("INSERT OR REPLACE INTO pre_preferencia (idpro_professor, idsem_semestre, pre_maxSeguidas, pre_maxDiarias) VALUES (?, ?, ?, ?)", (pro_id, SEMESTRE_ID, max_seg, max_dia))
     return True
 
 
@@ -561,15 +614,12 @@ def excluir_preferencia(pro_id):
 
 
 def salvar_bloqueados(periodo, ids):
-    if periodo not in PERIODOS_BLOQUEAVEIS:
-        return set()
+    if periodo not in PERIODOS_BLOQUEAVEIS: return set()
     validos = set(_mapa_horarios()[0].keys())
     ids = {i for i in ids if i in validos}
     with conexao() as c:
-        c.execute("DELETE FROM blq_bloqueio WHERE idper_periodo = ?", (periodo,))
-        c.executemany(
-            "INSERT INTO blq_bloqueio (idper_periodo, idhor_horario) VALUES (?, ?)",
-            [(periodo, i) for i in ids])
+        c.execute("DELETE FROM blq_bloqueio WHERE idper_periodo = ? AND idsem_semestre = ?", (periodo, SEMESTRE_ID))
+        c.executemany("INSERT INTO blq_bloqueio (idper_periodo, idhor_horario, idsem_semestre) VALUES (?, ?, ?)", [(periodo, i, SEMESTRE_ID) for i in ids])
     return ids
 
 

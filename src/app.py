@@ -198,7 +198,7 @@ def gerar():
 
     resultado = gerar_grade(
         repo.DB_PATH, repo.SEMESTRE_ID, repo.bloqueados_por_periodo(), repo.restricoes_por_professor(),
-        repo.max_seguidas_por_professor(), repo.ids_do_algoritmo())
+        repo.limites_por_professor(), repo.ids_do_algoritmo())
 
     if resultado["ok"]:
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
@@ -406,14 +406,15 @@ def restricoes():
 @app.route("/preferencias/nova", methods=["POST"])
 def nova_preferencia():
     prof = request.form.get("prof")
-    maximo = request.form.get("max")
-    if not (prof in repo.professores() and maximo in ("2", "3")
-            and repo.salvar_preferencia(prof, int(maximo))):
-        flash("Escolha o professor e o limite de aulas seguidas.", "erro")
-        return redirect(url_for("restricoes"))
-    flash("Preferência salva. Use \"Gerar grade\" para aplicá-la.", "ok")
+    max_seg = request.form.get("max_seg")
+    max_dia = request.form.get("max_dia")
+    
+    if prof in repo.professores() and max_seg in ("2", "3") and max_dia in ("2", "4"):
+        repo.salvar_preferencia(prof, int(max_seg), int(max_dia))
+        flash("Preferência salva. Use \"Gerar grade\" para aplicá-la.", "ok")
+    else:
+        flash("Escolha o professor e os limites corretamente.", "erro")
     return redirect(url_for("restricoes"))
-
 
 @app.route("/preferencias/<int:pro_id>/excluir", methods=["POST"])
 def excluir_preferencia(pro_id):
@@ -429,11 +430,13 @@ def nova_restricao():
     h = request.form.get("h")
     motivo = (request.form.get("motivo") or "").strip()
 
-    if not (prof in repo.professores() and dia in repo.DIAS and h and h.isdigit()):
+    horarios_validos = [str(i) for i in range(7)] + ["todos"]
+
+    if not (prof in repo.professores() and dia in repo.DIAS and h in horarios_validos):
         flash("Preencha todos os campos da restrição.", "erro")
         return redirect(url_for("restricoes"))
 
-    status = repo.criar_restricao(prof, dia, int(h), motivo or "Não informado")
+    status = repo.criar_restricao(prof, dia, h, motivo or "Não informado")
 
     if status == "atualizado":
         flash("Esta restrição já existia. O motivo foi atualizado com sucesso. Use \"Gerar grade\" para aplicar.", "ok")

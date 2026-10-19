@@ -62,6 +62,7 @@
       <div class="campo">
         <label for="h">Horário</label>
         <select name="h" id="h" required>
+          <option value="todos">O dia todo (Todas as aulas)</option>
           {% for faixa in horarios %}<option value="{{ loop.index0 }}">{{ faixa }}</option>{% endfor %}
         </select>
       </div>
@@ -75,22 +76,22 @@
 
   <section class="painel">
     <div class="painel-head">
-      <h2>Aulas consecutivas no mesmo dia</h2>
-      <span class="sub">Limite por professor, aplicado a cada turma dele</span>
+      <h2>Limites de aulas do professor</h2>
+      <span class="sub">Limites de aulas consecutivas e totais no mesmo dia</span>
     </div>
 
     {% if preferencias %}
       <div class="rolagem">
         <table class="catalogo">
-          <thead><tr><th>Professor</th><th>Limite</th><th></th></tr></thead>
+          <thead><tr><th>Professor</th><th>Limites configurados</th><th></th></tr></thead>
           <tbody>
             {% for p in preferencias %}
               <tr>
                 <td>{{ p.prof }}</td>
-                <td>{% if p.max == 3 %}No máximo 3 aulas consecutivas{% else %}No máximo 2 aulas consecutivas{% endif %}</td>
+                <td>Máx {{ p.max_seg }} seguidas / Máx {{ p.max_dia }} no dia</td>
                 <td>
                   <form method="post" action="{{ url_for('excluir_preferencia', pro_id=p.prof_id) }}"
-                        onsubmit="return confirm('Remover esta preferência de aulas consecutivas?');">
+                        onsubmit="return confirm('Remover esta preferência?');">
                     <button class="link perigo" type="submit">Remover</button>
                   </form>
                 </td>
@@ -109,10 +110,17 @@
         </select>
       </div>
       <div class="campo">
-        <label for="max_p">Limite de aulas consecutivas</label>
-        <select name="max" id="max_p" required>
-          <option value="3">No máximo 3 aulas consecutivas</option>
-          <option value="2">No máximo 2 aulas consecutivas</option>
+        <label for="max_seg">Aulas consecutivas</label>
+        <select name="max_seg" id="max_seg" required>
+          <option value="3">No máximo 3 seguidas</option>
+          <option value="2">No máximo 2 seguidas</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="max_dia">Aulas por dia</label>
+        <select name="max_dia" id="max_dia" required>
+          <option value="4">No máximo 4 no total do dia</option>
+          <option value="2">No máximo 2 no total do dia</option>
         </select>
       </div>
       <button class="btn primary" type="submit">Salvar preferência</button>
