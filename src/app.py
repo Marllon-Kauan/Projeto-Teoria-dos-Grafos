@@ -294,7 +294,7 @@ def nova_turma():
     prof = request.form.get("prof")
 
     if not (cod and codigo.isdigit() and prof):
-        flash("Preencha a disciplina, o professor e o código numerico da turma.", "erro")
+        flash("Preencha a disciplina, o professor e o código numérico da turma.", "erro")
         return redirect(url_for("turmas"))
 
     erro = repo.criar_turma(cod, int(codigo), prof)
@@ -308,7 +308,7 @@ def nova_turma():
 @app.route("/turmas/<int:turma_id>/excluir", methods=["POST"])
 def excluir_turma(turma_id):
     repo.excluir_turma(turma_id)
-    flash("Turma excluida junto com as aulas associadas a mesma.", "ok")
+    flash("Turma excluída junto com as aulas associadas à mesma.", "ok")
     return redirect(url_for("turmas"))
 
 
@@ -361,12 +361,19 @@ def nova_restricao():
     h = request.form.get("h")
     motivo = (request.form.get("motivo") or "").strip()
 
-    if not (prof in repo.professores() and dia in repo.DIAS and h and h.isdigit()
-            and repo.criar_restricao(prof, dia, int(h), motivo or "Não informado")):
+    if not (prof in repo.professores() and dia in repo.DIAS and h and h.isdigit()):
         flash("Preencha todos os campos da restrição.", "erro")
         return redirect(url_for("restricoes"))
 
-    flash("Restrição adicionada. Use \"Gerar grade\" para aplicá-la.", "ok")
+    status = repo.criar_restricao(prof, dia, int(h), motivo or "Não informado")
+
+    if status == "atualizado":
+        flash("Esta restrição já existia. O motivo foi atualizado com sucesso. Use \"Gerar grade\" para aplicar.", "ok")
+    elif status == "criado":
+        flash("Restrição adicionada. Use \"Gerar grade\" para aplicá-la.", "ok")
+    else:
+        flash("Erro ao salvar a restrição. Tente novamente.", "erro")
+
     return redirect(url_for("restricoes"))
 
 

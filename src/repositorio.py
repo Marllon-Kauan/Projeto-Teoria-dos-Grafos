@@ -434,7 +434,7 @@ def criar_restricao(prof_nome, dia, h, motivo):
     pro_id = _prof_id(prof_nome)
     hid = hor_id(dia, h)
     if pro_id is None or hid is None:
-        return False
+        return "erro"
     with conexao() as c:
         #Verifica se já existe uma restrição para esse professor nesse horário.
         existente = c.execute(
@@ -443,18 +443,19 @@ def criar_restricao(prof_nome, dia, h, motivo):
         ).fetchone()
         
         if existente:
-            #Se já existe, apenas atualiza o motivo para evitar duplicidade.
+            #Se já existe, atualiza o motivo e avisa ao app.py que foi uma atualização.
             c.execute(
                 "UPDATE res_restricao SET res_motivo = ? WHERE idpro_professor = ? AND idhor_horario = ?",
                 (motivo, pro_id, hid)
             )
+            return "atualizado"
         else:
-            #Se não existe, cria a nova restrição.
+            #Se não existe, cria a nova restrição e avisa ao app.py que foi uma criação.
             c.execute(
                 "INSERT INTO res_restricao (idpro_professor, idhor_horario, res_motivo) VALUES (?, ?, ?)",
                 (pro_id, hid, motivo)
             )
-    return True
+            return "criado"
 
 
 def excluir_restricao(restricao_id):
