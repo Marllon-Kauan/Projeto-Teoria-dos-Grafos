@@ -74,12 +74,12 @@ def ordenar_turmas(grafo):
 #Função que escolhe e distribui os horários.
 def alocar_horarios(grafo, ordem_alocacao):
     blocos_geminados = [
-        (1, 2), (3, 4), (5, 6),       #Segunda 
-        (8, 9), (10, 11), (12, 13),   #Terça   
-        (15, 16), (17, 18), (19, 20), #Quarta  
-        (22, 23), (24, 25), (26, 27), #Quinta  
-        (29, 30), (31, 32), (33, 34), #Sexta   
-        (36, 37), (38, 39), (40, 41)  #Sábado  
+        (1, 2), (3, 4), (5, 6), (6, 7),         #Segunda 
+        (8, 9), (10, 11), (12, 13), (13, 14),   #Terça   
+        (15, 16), (17, 18), (19, 20), (20, 21), #Quarta  
+        (22, 23), (24, 25), (26, 27), (27, 28), #Quinta  
+        (29, 30), (31, 32), (33, 34), (34, 35), #Sexta   
+        (36, 37), (38, 39), (40, 41), (41, 42)  #Sábado  
     ]
 
     turmas_com_erro = []
@@ -98,6 +98,10 @@ def alocar_horarios(grafo, ordem_alocacao):
             h1, h2 = bloco
             
             if h1 not in turma.dominio_horarios or h2 not in turma.dominio_horarios:
+                continue
+
+            #Evita que um horário sobreposto seja alocado se o 5,6 já foi pego.
+            if h1 in turma.horarios_alocados or h2 in turma.horarios_alocados:
                 continue
 
             #Pega todos os horários que o professor já dá aula na semana inteira.
