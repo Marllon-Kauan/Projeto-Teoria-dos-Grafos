@@ -106,38 +106,48 @@ def maior_sequencia(posicoes):
     return maior
 
 
+#Verifica se a aula pode ir para o novo dia/horario.
 def validar_movimento(aula, dia_destino, h_destino):
-    """
-    Verifica se a aula pode ir para o novo dia/horario.
-    Retorna None quando pode, ou a mensagem do impedimento.
-    """
     destino = repo.hor_id(dia_destino, h_destino)
     if destino is None:
-        return "Horario inexistente."
+        return "Horário inexistente."
 
     turma = repo.buscar_turma(aula["turma"])
     onde = "%s, %s" % (repo.DIAS_LONGO[dia_destino], repo.horarios()[h_destino])
 
-    # 1) horario bloqueado pelo usuario (vale so para o 1o ao 4o periodo)
+    #Horário bloqueado pelo usuário.
     if (turma["periodo"] in repo.PERIODOS_BLOQUEAVEIS
             and destino in repo.bloqueados_por_periodo().get(turma["periodo"], set())):
-        return "%s esta bloqueado para turmas do %do periodo." % (onde, turma["periodo"])
+        return "%s está bloqueado para turmas do %do período." % (onde, turma["periodo"])
 
-    # 2) restricao de horario do professor
+    #Restrição de horario do professor
     for r in repo.restricoes():
         if r["prof_id"] == turma["prof_id"] and r["hor_id"] == destino:
-            return "%s tem restricao em %s (%s)." % (turma["prof"], onde, r["motivo"])
+            return "%s tem restrição em %s (%s)." % (turma["prof"], onde, r["motivo"])
 
-    # 2b) limite de aulas seguidas no mesmo dia pedido pelo professor
-    limite = repo.max_seguidas_por_professor().get(turma["prof_id"])
-    if limite:
-        da_turma = [(a["dia"], a["h"]) for a in repo.aulas()
-                    if a["turma"] == turma["id"] and a["id"] != aula["id"]]
-        if maior_sequencia(da_turma + [(dia_destino, h_destino)]) > limite:
-            return "%s aceita no maximo %d aulas seguidas no mesmo dia (%s)." % (
-                turma["prof"], limite, turma["cod"])
+    #Limite de aulas seguidas e diárias do professor.
+    limites = repo.limites_por_professor().get(turma["prof_id"])
+    if limites:
+        #Lista as posições de todas as aulas do professor, exceto a que está sendo movida.
+        aulas_prof = []
+        for a in repo.aulas():
+            if a["id"] == aula["id"]:
+                continue
+            t_aux = repo.buscar_turma(a["turma"])
+            if t_aux and t_aux["prof_id"] == turma["prof_id"]:
+                aulas_prof.append((a["dia"], a["h"]))
 
-    # 3) conflitos com as outras aulas no mesmo horario
+        #Verifica o novo limite diário.
+        aulas_no_dia = [h for d, h in aulas_prof if d == dia_destino] + [h_destino]
+        if len(aulas_no_dia) > limites["diarias"]:
+            return "%s aceita no máximo %d aulas por dia." % (turma["prof"], limites["diarias"])
+
+        #Verifica o limite de seguidas com a função já existente.
+        if maior_sequencia(aulas_prof + [(dia_destino, h_destino)]) > limites["seguidas"]:
+            return "%s aceita no máximo %d aulas seguidas no mesmo dia." % (
+                turma["prof"], limites["seguidas"])
+
+    #Conflitos com as outras aulas no mesmo horario.
     turmas = {t["id"]: t for t in repo.turmas()}
     for outra in repo.aulas():
         if outra["id"] == aula["id"] or outra["hor_id"] != destino:
@@ -146,13 +156,13 @@ def validar_movimento(aula, dia_destino, h_destino):
         if t2 is None:
             continue
         if t2["prof_id"] == turma["prof_id"]:
-            return "%s ja tem aula em %s." % (turma["prof"], onde)
+            return "%s já tem aula em %s." % (turma["prof"], onde)
         if turma["periodo"] is not None and t2["periodo"] == turma["periodo"]:
-            return "O %do periodo ja tem aula em %s." % (turma["periodo"], onde)
+            return "O %do período já tem aula em %s." % (turma["periodo"], onde)
         if t2["dis_id"] == turma["dis_id"]:
-            return "Outra turma da mesma disciplina ja tem aula em %s." % onde
+            return "Outra turma da mesma disciplina já tem aula em %s." % onde
         if outra["sal_id"] == aula["sal_id"]:
-            return "A sala %s ja esta ocupada em %s." % (aula["sala"], onde)
+            return "A sala %s já está ocupada em %s." % (aula["sala"], onde)
     return None
 
 
@@ -485,11 +495,11 @@ def mover_aula():
     aula = next((a for a in repo.aulas() if a["id"] == aula_id), None)
     if (aula is None or dia not in repo.DIAS or not isinstance(h, int)
             or not 0 <= h < len(repo.horarios())):
-        return jsonify(ok=False, mensagem="Dados invalidos para a alteracao."), 400
+        return jsonify(ok=False, mensagem="Dados inválidos para a alteração."), 400
 
     erro = validar_movimento(aula, dia, h)
     if erro:
-        return jsonify(ok=False, mensagem="Alteracao recusada. " + erro)
+        return jsonify(ok=False, mensagem="Alteração recusada." + erro)
 
     repo.mover_aula(aula["id"], repo.hor_id(dia, h))
     turma = repo.buscar_turma(aula["turma"])

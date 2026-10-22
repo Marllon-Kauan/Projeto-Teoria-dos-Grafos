@@ -372,7 +372,7 @@ def limites_por_professor():
 
 def max_seguidas_por_professor():
     """{pro_id: n} no formato que o builder.py recebe."""
-    return {p["prof_id"]: p["max"] for p in preferencias()}
+    return {p["prof_id"]: p["max_seg"] for p in preferencias()}
 
 
 def bloqueados_por_periodo():
