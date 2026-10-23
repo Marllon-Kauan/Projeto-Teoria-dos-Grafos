@@ -15,7 +15,7 @@
 <div class="pagina">
   <section class="painel">
     <div class="painel-head">
-      <h2>Turma {{ "%02d" | format(turma.turma|int) }}</h2>
+      <h2>Turma {{ turma.turma }}</h2>
       <span class="sub">Semestre {{ semestre }}</span>
     </div>
     <div class="rolagem">
@@ -63,9 +63,9 @@
 
       <div class="campo">
         <label for="turma">Turma</label>
-        <input name="turma" id="turma" type="text" pattern="\d{2}" maxlength="2"
-               inputmode="numeric" value="{{ '%02d' | format(valores.turma|int) }}" 
-               title="O código da turma deve ter exatamente 2 dígitos (ex: 10, 02)." required>
+        <input name="turma" id="turma" type="text" pattern="[A-Za-z]{2}" maxlength="2"
+              style="text-transform: uppercase;" value="{{ valores.turma }}" 
+              title="O código da turma deve ter exatamente 2 letras (ex: MA, TG)." required>
       </div>
 
       <div class="campo">

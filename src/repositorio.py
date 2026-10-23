@@ -404,15 +404,6 @@ def criar_turma(cod_disciplina, codigo_turma, prof_nome):
 
 
 def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=None):
-    """
-    Atualiza os dados da turma. Retorna (erro, aviso).
-
-    - Trocar a disciplina remove as alocacoes da turma (a sala passa a ser
-      definida novamente pelo algoritmo).
-    - Trocar o professor valida restricoes e aulas do novo professor nos
-      horarios ja alocados.
-    - Trocar a sala valida a ocupacao das salas nesses horarios.
-    """
     atual = buscar_turma(turma_id)
     if atual is None:
         return "Turma não encontrada.", None
@@ -421,7 +412,8 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
     pro_id = _prof_id(prof_nome)
     if dis is None or pro_id is None:
         return "Disciplina ou professor inválido.", None
-    if not isinstance(codigo_turma, int) or codigo_turma <= 0:
+        
+    if not isinstance(codigo_turma, str) or len(codigo_turma) != 2:
         return "Código da turma inválido.", None
 
     mudou_disciplina = dis["id"] != atual["dis_id"]
@@ -429,7 +421,7 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
     aulas_turma = [a for a in aulas() if a["turma"] == turma_id]
     outras_aulas = [a for a in aulas() if a["turma"] != turma_id]
 
-    # Novo professor: restricoes e aulas ja existentes dele no mesmo horario.
+    #Novo professor: restricoes e aulas ja existentes dele no mesmo horario.
     if mudou_professor and not mudou_disciplina and aulas_turma:
         restritas = restricoes_por_professor().get(pro_id, set())
         turmas_por_id = {t["id"]: t for t in turmas()}
@@ -446,11 +438,18 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
                 if t2 is not None and t2["prof_id"] == pro_id:
                     return ("O professor %s já tem aula em %s." % (prof_nome, quando), None)
 
-    # Nova sala: precisa existir e estar livre em todos os horarios da turma.
+    #Nova sala: precisa existir, estar disponível e estar livre em todos os horarios da turma.
     if sala_id is not None:
-        salas_validas = {s["id"]: s["nome"] for s in salas()}
+        todas_salas = salas()
+        salas_validas = {s["id"]: s["nome"] for s in todas_salas}
+        
         if sala_id not in salas_validas:
             return "Sala inválida.", None
+            
+        sala_selecionada = next((s for s in todas_salas if s["id"] == sala_id), None)
+        if sala_selecionada and sala_selecionada["status"] == STATUS_INDISPONIVEL:
+            return "A sala selecionada está indisponível.", None
+            
         if aulas_turma and not mudou_disciplina:
             for aula in aulas_turma:
                 for outra in outras_aulas:
@@ -484,8 +483,8 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
 
     aviso = None
     if mudou_disciplina and aulas_turma:
-        aviso = ("As alocacoes da turma foram removidas; use \"Gerar grade\" "
-                 "para aloca-la novamente.")
+        aviso = ("As alocações da turma foram removidas; use \"Gerar grade\" "
+                 "para alocá-las novamente.")
     return None, aviso
 
 
@@ -523,22 +522,31 @@ def criar_sala(bloco, numero):
 
 
 def atualizar_disponibilidade_sala(sala_id, status, motivo=None):
-    """Atualiza status e motivo. Retorna None ou a mensagem de erro."""
     if status not in (STATUS_DISPONIVEL, STATUS_INDISPONIVEL):
-        return "Status de sala inválido."
+        return "Status de sala inválido.", None
     motivo = (motivo or "").strip()
     if status == STATUS_DISPONIVEL:
-        motivo = None          # SA05: ao ficar disponível, o motivo é limpo.
+        motivo = None          
     else:
         motivo = motivo or None
+        
+    aviso = None
     with conexao() as c:
+        if status == STATUS_INDISPONIVEL:
+            em_uso = c.execute(
+                "SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idsal_sala = ?",
+                (sala_id,)
+            ).fetchone()[0]
+            if em_uso > 0:
+                aviso = "Atenção: A sala possui %d aula(s) alocada(s) que permanecerão nela até a próxima geração da grade." % em_uso
+                
         cursor = c.execute(
             "UPDATE sal_sala SET sal_status = ?, sal_motivo = ? WHERE sal_id = ?",
             (status, motivo, sala_id))
         if cursor.rowcount == 0:
-            return "Sala não encontrada."
-    return None
-
+            return "Sala não encontrada.", None
+            
+    return None, aviso
 
 def excluir_sala(sala_id):
     """Exclui a sala se não houver alocações. Retorna None ou a mensagem de erro."""

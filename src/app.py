@@ -234,7 +234,6 @@ def turmas():
 
 
 def _render_editar_turma(turma, valores):
-    salas_atuais = repo.salas_da_turma(turma["id"])
     return render_template(
         "editar_turma.html",
         semestre=repo.semestre(),
@@ -242,15 +241,14 @@ def _render_editar_turma(turma, valores):
         valores=valores,
         disciplinas=repo.disciplinas(),
         professores=repo.professores(),
-        salas=repo.salas(),
-        tem_alocacoes=bool(salas_atuais),
+        salas= [s for s in repo.salas() if s["status"] == repo.STATUS_DISPONIVEL],
+        tem_alocacoes=bool(repo.salas_da_turma(turma["id"])),
         qtd_aulas=sum(1 for a in repo.aulas() if a["turma"] == turma["id"]),
     )
 
 
 @app.route("/turmas/<int:turma_id>/editar", methods=["GET", "POST"])
 def editar_turma(turma_id):
-    """Edicao de turma (CT09): codigo, disciplina, professor e sala."""
     turma = repo.buscar_turma(turma_id)
     if turma is None:
         flash("Turma não encontrada.", "erro")
@@ -258,7 +256,7 @@ def editar_turma(turma_id):
 
     if request.method == "POST":
         cod = request.form.get("cod")
-        codigo = (request.form.get("turma") or "").strip()
+        codigo = (request.form.get("turma") or "").strip().upper()
         prof = request.form.get("prof")
         sala_raw = (request.form.get("sala") or "").strip()
         
@@ -267,8 +265,8 @@ def editar_turma(turma_id):
             "prof": prof or "", "sala": sala_raw,
         }
 
-        if not (cod and codigo.isdigit() and len(codigo) == 2 and prof):
-            flash("Preencha a disciplina, o professor e um código numérico de exatamente 2 dígitos para a turma (ex: 10, 02).", "erro")
+        if not (cod and len(codigo) == 2 and codigo.isalpha() and prof):
+            flash("Preencha a disciplina, o professor e um código de exatamente 2 letras para a turma (ex: MA, TG).", "erro")
             return _render_editar_turma(turma, valores)
             
         if sala_raw and not sala_raw.isdigit():
@@ -276,7 +274,7 @@ def editar_turma(turma_id):
             return _render_editar_turma(turma, valores)
 
         erro, aviso = repo.atualizar_turma(
-            turma_id, cod, int(codigo), prof,
+            turma_id, cod, codigo, prof,
             int(sala_raw) if sala_raw else None,
         )
         if erro:
@@ -302,15 +300,15 @@ def editar_turma(turma_id):
 @app.route("/turmas/nova", methods=["POST"])
 def nova_turma():
     cod = request.form.get("cod")
-    codigo = (request.form.get("turma") or "").strip()
+    codigo = (request.form.get("turma") or "").strip().upper() 
     prof = request.form.get("prof")
 
-    #Exige que o código tenha exatamente 2 dígitos numéricos
-    if not (cod and codigo.isdigit() and len(codigo) == 2 and prof):
-        flash("Preencha a disciplina, o professor e um código numérico de exatamente 2 dígitos para a turma (ex: 10, 02).", "erro")
+    if not (cod and len(codigo) == 2 and codigo.isalpha() and prof):
+        flash("Preencha a disciplina, o professor e um código de exatamente 2 letras para a turma (ex: MA, TG).", "erro")
         return redirect(url_for("turmas"))
 
-    erro = repo.criar_turma(cod, int(codigo), prof)
+    erro = repo.criar_turma(cod, codigo, prof)
+    
     if erro:
         flash(erro, "erro")
     else:
@@ -363,11 +361,16 @@ def salas():
                     or status not in (repo.STATUS_DISPONIVEL, repo.STATUS_INDISPONIVEL)):
                 flash("Não foi possível alterar a disponibilidade: dados inválidos.", "erro")
                 return redirect(url_for("salas"))
-            erro = repo.atualizar_disponibilidade_sala(int(sala_id), status, motivo)
+            
+            erro, aviso = repo.atualizar_disponibilidade_sala(int(sala_id), status, motivo)
+            
             if erro:
                 flash(erro, "erro")
             elif status == repo.STATUS_INDISPONIVEL:
-                flash("Sala marcada como indisponível.", "ok")
+                mensagem = "Sala marcada como indisponível."
+                if aviso:
+                    mensagem += " " + aviso
+                flash(mensagem, "ok")
             else:
                 flash("Sala marcada como disponível. O motivo anterior foi removido.", "ok")
             return redirect(url_for("salas"))

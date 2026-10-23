@@ -29,7 +29,7 @@
             <tr>
               <td><span class="tag cor{{ disciplinas[t.cod].cor }}">{{ t.cod }}</span></td>
               <td>{{ disciplinas[t.cod].nome }}</td>
-              <td>{{ "%02d" | format(t.turma|int) }}</td>
+              <td>{{ t.turma }}</td>
               <td>{{ t.prof }}</td>
               <td>{% if t.periodo %}{{ t.periodo }}º{% else %}Eletiva{% endif %}</td>
               <td>{{ t.sala or '—' }}</td>
@@ -64,9 +64,9 @@
       </div>
       <div class="campo">
         <label for="turma">Turma</label>
-        <input name="turma" id="turma" type="text" pattern="\d{2}" maxlength="2"
-               inputmode="numeric" placeholder="Ex: 10" 
-               title="O código da turma deve ter exatamente 2 dígitos (ex: 10, 02)." required>
+        <input name="turma" id="turma" type="text" pattern="[A-Za-z]{2}" maxlength="2"
+              style="text-transform: uppercase;" placeholder="Ex: MA" 
+              title="O código da turma deve ter exatamente 2 letras (ex: MA, TG)." required>
       </div>
       <div class="campo">
         <label for="prof">Professor</label>

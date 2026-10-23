@@ -34,13 +34,14 @@ CREATE TABLE dis_disciplina (
 
 CREATE TABLE tur_turma (
     tur_id INT PRIMARY KEY,
-    tur_codigo INT,
+    tur_codigo VARCHAR(2),
     idpro_professor INT,
     iddis_disciplina INT,
     idsem_semestre INT,
     FOREIGN KEY (idpro_professor) REFERENCES pro_professor (pro_id),
     FOREIGN KEY (iddis_disciplina) REFERENCES dis_disciplina (dis_id),
-    FOREIGN KEY (idsem_semestre) REFERENCES sem_semestre (sem_id)
+    FOREIGN KEY (idsem_semestre) REFERENCES sem_semestre (sem_id),
+    UNIQUE (tur_codigo, idsem_semestre)
 );
 
 CREATE TABLE hor_horario (
@@ -250,54 +251,54 @@ INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_ho
 (60, 6, 'L', 1620, 1710);
 
 INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) VALUES
-(1, 2026101, 1, 1, 2),
-(2, 2026102, 2, 2, 2),
-(3, 2026103, 3, 3, 2),
-(4, 2026104, 4, 4, 2),
-(5, 2026105, 4, 5, 2),
-(6, 2026106, 5, 6, 2),
-(7, 2026107, 5, 7, 2),
-(8, 2026108, 7, 8, 2),
-(9, 2026109, 7, 9, 2),
-(10, 2026110, 8, 10, 2),
-(11, 2026111, 9, 11, 2),
-(12, 2026112, 9, 12, 2),
-(13, 2026113, 9, 13, 2),
-(14, 2026114, 10, 14, 2),
-(15, 2026115, 11, 15, 2),
-(16, 2026116, 11, 16, 2),
-(17, 2026117, 11, 17, 2),
-(18, 2026118, 11, 18, 2),
-(19, 2026119, 12, 19, 2),
-(20, 2026120, 12, 20, 2),
-(21, 2026121, 13, 21, 2),
-(22, 2026122, 14, 22, 2),
-(23, 2026123, 14, 23, 2),
-(24, 2026124, 15, 24, 2),
-(25, 2026125, 15, 25, 2),
-(26, 2026126, 16, 26, 2),
-(27, 2026127, 17, 27, 2),
-(28, 2026128, 17, 28, 2),
-(29, 2026129, 17, 29, 2),
-(30, 2026130, 18, 30, 2),
-(31, 2026131, 18, 31, 2),
-(32, 2026132, 19, 32, 2),
-(33, 2026133, 19, 33, 2),
-(34, 2026134, 20, 34, 2),
-(35, 2026135, 20, 35, 2),
-(36, 2026136, 21, 36, 2),
-(37, 2026137, 21, 37, 2),
-(38, 2026138, 22, 38, 2),
-(39, 2026139, 22, 39, 2),
-(40, 2026140, 22, 40, 2),
-(41, 2026141, 23, 41, 2),
-(42, 2026142, 24, 42, 2),
-(43, 2026143, 25, 43, 2),
-(44, 2026144, 25, 44, 2),
-(45, 2026145, 26, 45, 2),
-(46, 2026146, 26, 46, 2),
-(47, 2026147, 26, 47, 2),
-(48, 2026148, 6, 48, 2);
+(1, 'MD', 1, 1, 2),   -- Mineração de Dados
+(2, 'AM', 2, 2, 2),   -- Aprendizagem de Máquina
+(3, 'SC', 3, 3, 2),   -- Sistemas de Comunicação
+(4, 'AE', 4, 4, 2),   -- Algoritmos e Estruturas de Dados
+(5, 'PF', 4, 5, 2),   -- Projeto Final de Curso
+(6, 'CP', 5, 6, 2),   -- Controle de Processos
+(7, 'RB', 5, 7, 2),   -- Redes de Computadores 2 (Redes B)
+(8, 'ER', 7, 8, 2),   -- Elementos de Robótica
+(9, 'SS', 7, 9, 2),   -- Sinais e Sistemas
+(10, 'RA', 8, 10, 2), -- Redes de Computadores 1 (Redes A)
+(11, 'PO', 9, 11, 2), -- Pesquisa Operacional
+(12, 'TC', 9, 12, 2), -- Teoria da Computação
+(13, 'TG', 9, 13, 2), -- Teoria dos Grafos
+(14, 'CN', 10, 14, 2),-- Computação Natural
+(15, 'GT', 11, 15, 2),-- Gestão de TIC e Empreendedorismo
+(16, 'PE', 11, 16, 2),-- Projeto em Engenharia da Computação
+(17, 'IE', 11, 17, 2),-- Informática, Economia e Sociedade
+(18, 'FE', 11, 18, 2),-- Formação de Empreendedores
+(19, 'PI', 12, 19, 2),-- Programação Imperativa
+(20, 'SM', 12, 20, 2),-- Sistemas Multimídia
+(21, 'AP', 13, 21, 2),-- Análise e Projeto de Software
+(22, 'IA', 14, 22, 2),-- Inteligência Artificial
+(23, 'MC', 14, 23, 2),-- Metodologia Científica
+(24, 'SE', 15, 24, 2),-- Sistemas Embarcados
+(25, 'OC', 15, 25, 2),-- Organização de Computadores
+(26, 'CE', 16, 26, 2),-- Conversão Eletromecânica de Energia
+(27, 'LP', 17, 27, 2),-- Linguagem de Prog. Orientada a Objetos
+(28, 'FP', 17, 28, 2),-- Fundamentos de Programação
+(29, 'PD', 17, 29, 2),-- Processamento Digital de Imagem
+(30, 'GP', 18, 30, 2),-- Gerência de Projeto
+(31, 'IN', 18, 31, 2),-- Introdução à Engenharia
+(32, 'MT', 19, 32, 2),-- Matemática Discreta
+(33, 'CO', 19, 33, 2),-- Compiladores
+(34, 'BD', 20, 34, 2),-- Banco de Dados
+(35, 'EQ', 20, 35, 2),-- Engenharia de Requisitos
+(36, 'MA', 21, 36, 2),-- Modelagem Analítica
+(37, 'RN', 21, 37, 2),-- Redes Neurais
+(38, 'EC', 22, 38, 2),-- Eletrônica para Computação
+(39, 'AI', 22, 39, 2),-- Automação Industrial
+(40, 'MS', 22, 40, 2),-- Materiais e Dispositivos Semicondutores
+(41, 'LG', 23, 41, 2),-- Lógica
+(42, 'CI', 24, 42, 2),-- Circuitos Elétricos
+(43, 'AC', 25, 43, 2),-- Arquitetura de Computadores
+(44, 'ED', 25, 44, 2),-- Eletrônica Digital
+(45, 'MF', 26, 45, 2),-- Métodos Formais
+(46, 'SO', 26, 46, 2),-- Sistemas Operacionais
+(47, 'IH', 26, 47, 2),-- Interface Humano-Computador
+(48, 'ES', 6, 48, 2); -- Engenharia de Software
 
 INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES
 (1, 1, NULL, 39),
