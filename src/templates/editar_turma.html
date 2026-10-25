@@ -70,7 +70,7 @@
 
       <div class="campo">
         <label for="prof">Professor</label>
-        <select name="prof" id="prof" required>
+        <select name="prof" id="prof" required data-atual="{{ valores.prof }}">
           {% for p in professores %}
             <option value="{{ p }}" {% if p == valores.prof %}selected{% endif %}>{{ p }}</option>
           {% endfor %}
@@ -115,17 +115,22 @@
 <script>
 (function () {
   var disciplina = document.getElementById("cod");
+  var prof = document.getElementById("prof");
   var sala = document.getElementById("sala");
   var ajuda = document.getElementById("ajuda-sala");
-  if (!disciplina || !sala || !ajuda) return;
+  if (!disciplina || !prof || !sala || !ajuda) return;
 
   var disciplinaAtual = disciplina.dataset.atual;
+  var profAtual = prof.dataset.atual;
   var temAlocacoes = sala.dataset.temAlocacoes === "1";
 
   function atualizarSala() {
     var mudouDisciplina = disciplina.value !== disciplinaAtual;
-    sala.disabled = mudouDisciplina || !temAlocacoes;
-    if (mudouDisciplina) {
+    var mudouProf = prof.value !== profAtual;
+    var mudouAlgo = mudouDisciplina || mudouProf;
+    
+    sala.disabled = mudouAlgo || !temAlocacoes;
+    if (mudouAlgo) {
       ajuda.textContent = "A sala será definida pelo algoritmo na nova geração da grade.";
     } else if (temAlocacoes) {
       ajuda.textContent = "A sala altera todas as aulas já alocadas.";
@@ -135,6 +140,7 @@
   }
 
   disciplina.addEventListener("change", atualizarSala);
+  prof.addEventListener("change", atualizarSala);
   atualizarSala();
 })();
 </script>

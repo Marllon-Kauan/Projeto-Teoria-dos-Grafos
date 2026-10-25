@@ -15,13 +15,13 @@ from functools import lru_cache
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "banco_projeto.db")
 
-SEMESTRE_ID = 2          # mesmo valor que o main.py usa
-ANO = 2026               # o banco guarda so 1 ou 2; o ano e so o rotulo da tela
+SEMESTRE_ID = 2          
+ANO = 2026               
 
 DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
 DIAS_LONGO = {
-    "Seg": "Segunda", "Ter": "Terca", "Qua": "Quarta",
-    "Qui": "Quinta", "Sex": "Sexta", "Sab": "Sabado",
+    "Seg": "Segunda", "Ter": "Terça", "Qua": "Quarta",
+    "Qui": "Quinta", "Sex": "Sexta", "Sab": "Sábado",
 }
 # hor_diaSemana no banco: 2 = segunda ... 7 = sabado
 DIA_POR_NUM = {2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sab"}
@@ -450,13 +450,13 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
         if sala_selecionada and sala_selecionada["status"] == STATUS_INDISPONIVEL:
             return "A sala selecionada está indisponível.", None
             
-        if aulas_turma and not mudou_disciplina:
+        if aulas_turma and not (mudou_disciplina or mudou_professor):
             for aula in aulas_turma:
                 for outra in outras_aulas:
                     if outra["hor_id"] == aula["hor_id"] and outra["sal_id"] == sala_id:
                         pos = dia_h(aula["hor_id"])
                         quando = ("%s, %s" % (DIAS_LONGO[pos[0]], horarios()[pos[1]])
-                                  if pos else "o horario atual")
+                                  if pos else "o horário atual")
                         return ("A sala %s já está ocupada em %s."
                                 % (salas_validas[sala_id], quando), None)
 
@@ -468,7 +468,8 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
             return ("Já existe uma turma com o código %s neste semestre."
                     % codigo_turma, None)
 
-        if mudou_disciplina:
+        #Remove as alocações se mudar a disciplina ou o professor.
+        if mudou_disciplina or mudou_professor:
             c.execute("DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma = ?", (turma_id,))
 
         c.execute(
@@ -476,13 +477,15 @@ def atualizar_turma(turma_id, cod_disciplina, codigo_turma, prof_nome, sala_id=N
             "WHERE tur_id = ?",
             (codigo_turma, pro_id, dis["id"], turma_id))
 
-        if sala_id is not None and aulas_turma and not mudou_disciplina:
+        #Atualiza a sala apenas se não mudou a disciplina nem o professor.
+        if sala_id is not None and aulas_turma and not (mudou_disciplina or mudou_professor):
             c.execute(
                 "UPDATE alo_alocacaoHorarioSala SET idsal_sala = ? WHERE idtur_turma = ?",
                 (sala_id, turma_id))
 
     aviso = None
-    if mudou_disciplina and aulas_turma:
+    #Exibe o aviso de gerar grade se mudar a disciplina ou o professor.
+    if (mudou_disciplina or mudou_professor) and aulas_turma:
         aviso = ("As alocações da turma foram removidas; use \"Gerar grade\" "
                  "para alocá-las novamente.")
     return None, aviso

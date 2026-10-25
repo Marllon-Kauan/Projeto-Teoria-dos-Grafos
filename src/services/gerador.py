@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Roda o algoritmo completo (grafo -> horarios -> salas) e devolve o resultado,
-em vez de imprimir no terminal como o main.py faz. E o que o front chama.
+Roda o algoritmo completo (grafo -> horarios -> salas) e devolve o resultado pelo front.
 """
 
 import sqlite3

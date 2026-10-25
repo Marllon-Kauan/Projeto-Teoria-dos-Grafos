@@ -502,7 +502,7 @@ def mover_aula():
 
     erro = validar_movimento(aula, dia, h)
     if erro:
-        return jsonify(ok=False, mensagem="Alteração recusada." + erro)
+        return jsonify(ok=False, mensagem="Alteração recusada. " + erro)
 
     repo.mover_aula(aula["id"], repo.hor_id(dia, h))
     turma = repo.buscar_turma(aula["turma"])
