@@ -11,6 +11,7 @@ Como executar (dentro da pasta src):
 
 import csv
 import io
+import re
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -620,74 +621,90 @@ def exportar_pdf():
         headers={"Content-Disposition": "attachment; filename=%s" % nome},
     )
 
-#Cadastro de Disciplinas
 
-#Tela principal de listagem das disciplinas.
-@app.route("/disciplinas")
-def listar_disciplinas():
-    lista = list(repo.disciplinas().values())
+#Cadastro de professores.
+
+EMAIL_REGEX = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+
+def email_valido(email):
+    return bool(re.match(EMAIL_REGEX, email or ""))
+
+#Tela principal de listagem dos professores.
+@app.route("/professores")
+def listar_professores():
     return render_template(
-        "disciplinas.html", 
+        "professores.html",
         semestre=repo.semestre(),
-        disciplinas=lista,
-        periodos=repo.PERIODOS
+        professores=repo.professores_detalhados()
     )
 
-@app.route("/disciplinas/nova", methods=["POST"])
-def nova_disciplina():
-    codigo = request.form.get("codigo")
+
+#Cadastro de novo professor
+@app.route("/professores/novo", methods=["POST"])
+def novo_professor():
     nome = request.form.get("nome")
-    periodo_raw = request.form.get("periodo")
-    carga_raw = request.form.get("carga_horaria")
-    eletiva = request.form.get("eletiva") == "Sim"
-    
-    periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
-    carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
-    
-    erro = repo.criar_disciplina(codigo, nome, periodo, carga, eletiva)
+    email = request.form.get("email")
+
+    if not nome or not email:
+        flash("Preencha todos os campos obrigatórios.", "erro")
+        return redirect(url_for("listar_professores"))
+
+    if not email_valido(email):
+        flash("Informe um e-mail em formato válido (ex: professor@upe.br).", "erro")
+        return redirect(url_for("listar_professores"))
+
+    erro = repo.criar_professor(nome, email)
     if erro:
         flash(erro, "erro")
     else:
-        flash("Disciplina cadastrada com sucesso.", "ok")
-        
-    return redirect(url_for("listar_disciplinas"))
+        flash("Professor cadastrado com sucesso.", "ok")
 
-@app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
-def editar_disciplina(dis_id):
-    disciplina = repo.buscar_disciplina(dis_id)
-    if not disciplina:
-        flash("Disciplina não encontrada.", "erro")
-        return redirect(url_for("listar_disciplinas"))
-        
+    return redirect(url_for("listar_professores"))
+
+
+#Edição dos dados do professor
+@app.route("/professores/<int:pro_id>/editar", methods=["GET", "POST"])
+def editar_professor(pro_id):
+    prof = repo.buscar_professor(pro_id)
+    if not prof:
+        flash("Professor não encontrado.", "erro")
+        return redirect(url_for("listar_professores"))
+
     if request.method == "POST":
-        codigo = request.form.get("codigo")
         nome = request.form.get("nome")
-        periodo_raw = request.form.get("periodo")
-        carga_raw = request.form.get("carga_horaria")
-        eletiva = request.form.get("eletiva") == "Sim"
-        
-        periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
-        carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
-        
-        erro = repo.atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva)
+        email = request.form.get("email")
+
+        if not nome or not email:
+            flash("Preencha todos os campos obrigatórios.", "erro")
+            valores = {"nome": nome, "email": email}
+            return render_template("editar_professor.html", semestre=repo.semestre(), professor=prof, valores=valores)
+
+        if not email_valido(email):
+            flash("Informe um e-mail em formato válido (ex: professor@upe.br).", "erro")
+            valores = {"nome": nome, "email": email}
+            return render_template("editar_professor.html", semestre=repo.semestre(), professor=prof, valores=valores)
+
+        erro = repo.atualizar_professor(pro_id, nome, email)
         if erro:
             flash(erro, "erro")
-            valores = {"cod": codigo, "nome": nome, "periodo": periodo_raw, "carga_horaria": carga_raw, "eletiva": eletiva}
-            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=valores, periodos=repo.PERIODOS)
-            
-        flash("Disciplina atualizada com sucesso.", "ok")
-        return redirect(url_for("listar_disciplinas"))
-        
-    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=disciplina, periodos=repo.PERIODOS)
+            valores = {"nome": nome, "email": email}
+            return render_template("editar_professor.html", semestre=repo.semestre(), professor=prof, valores=valores)
 
-@app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
-def excluir_disciplina(dis_id):
-    erro = repo.excluir_disciplina(dis_id)
+        flash("Dados do professor atualizados com sucesso.", "ok")
+        return redirect(url_for("listar_professores"))
+
+    return render_template("editar_professor.html", semestre=repo.semestre(), professor=prof, valores=prof)
+
+
+#Exclusão de professor com checagem de turmas e remoção de restrições.
+@app.route("/professores/<int:pro_id>/excluir", methods=["POST"])
+def excluir_professor(pro_id):
+    erro = repo.excluir_professor(pro_id)
     if erro:
         flash(erro, "erro")
     else:
-        flash("Disciplina excluída com sucesso.", "ok")
-    return redirect(url_for("listar_disciplinas"))
+        flash("Professor e suas restrições do semestre ativo foram excluídos com sucesso.", "ok")
+    return redirect(url_for("listar_professores"))
 
 
 if __name__ == "__main__":

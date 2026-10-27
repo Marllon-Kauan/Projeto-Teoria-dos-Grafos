@@ -712,3 +712,90 @@ def mover_aula(aula_id, novo_hor_id):
     with conexao() as c:
         c.execute("UPDATE alo_alocacaoHorarioSala SET idhor_horario = ? WHERE alo_id = ?",
                   (novo_hor_id, aula_id))
+
+
+#Cadastro de Professores
+
+#Retorna lista de professores com id, nome e e-mail.
+def professores_detalhados():
+    with conexao() as c:
+        linhas = c.execute(
+            "SELECT pro_id, pro_nome, pro_email FROM pro_professor ORDER BY pro_nome"
+        ).fetchall()
+    return [{"id": r["pro_id"], "nome": r["pro_nome"], "email": r["pro_email"]} for r in linhas]
+
+#Busca um professor especifico pelo ID.
+def buscar_professor(pro_id):
+    with conexao() as c:
+        r = c.execute(
+            "SELECT pro_id, pro_nome, pro_email FROM pro_professor WHERE pro_id = ?",
+            (pro_id,)
+        ).fetchone()
+    if r:
+        return {"id": r["pro_id"], "nome": r["pro_nome"], "email": r["pro_email"]}
+    return None
+
+#Cadastra um novo professor.
+def criar_professor(nome, email):
+    nome = (nome or "").strip()
+    email = (email or "").strip().lower()
+
+    if not nome or not email:
+        return "Nome e e-mail de contato são obrigatórios."
+
+    with conexao() as c:
+        if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_email) = ?", (email,)).fetchone():
+            return f"O e-mail '{email}' já está cadastrado para outro professor."
+
+        novo = (c.execute("SELECT MAX(pro_id) FROM pro_professor").fetchone()[0] or 0) + 1
+        c.execute(
+            "INSERT INTO pro_professor (pro_id, pro_nome, pro_email) VALUES (?, ?, ?)",
+            (novo, nome, email)
+        )
+    return None
+
+#Atualiza dados do professor mantendo vínculos.
+def atualizar_professor(pro_id, nome, email):
+    nome = (nome or "").strip()
+    email = (email or "").strip().lower()
+
+    if not nome or not email:
+        return "Nome e e-mail de contato são obrigatórios."
+
+    with conexao() as c:
+        if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_email) = ? AND pro_id <> ?", (email, pro_id)).fetchone():
+            return f"O e-mail '{email}' já está cadastrado para outro professor."
+
+        cursor = c.execute(
+            "UPDATE pro_professor SET pro_nome = ?, pro_email = ? WHERE pro_id = ?",
+            (nome, email, pro_id)
+        )
+        if cursor.rowcount == 0:
+            return "Professor não encontrado."
+    return None
+
+
+#Exclui o professor se não houver turmas alocadas no semestre ativo.
+def excluir_professor(pro_id):
+    with conexao() as c:
+        turmas_vinculadas = c.execute("""
+            SELECT T.tur_codigo, D.dis_nome
+            FROM tur_turma T
+            JOIN dis_disciplina D ON D.dis_id = T.iddis_disciplina
+            WHERE T.idpro_professor = ? AND T.idsem_semestre = ?
+        """, (pro_id, SEMESTRE_ID)).fetchall()
+
+        if turmas_vinculadas:
+            detalhes = ", ".join([f"{r['dis_nome']} (Turma {r['tur_codigo']})" for r in turmas_vinculadas])
+            return (
+                f"A exclusão foi impedida pois o professor está vinculado a turmas no semestre ativo: {detalhes}. "
+                "Remova ou atribua estas turmas a outro professor antes de prosseguir."
+            )
+
+        #Exclui automaticamente restrições e preferências do semestre ativo.
+        c.execute("DELETE FROM res_restricao WHERE idpro_professor = ? AND idsem_semestre = ?", (pro_id, SEMESTRE_ID))
+        c.execute("DELETE FROM pre_preferencia WHERE idpro_professor = ? AND idsem_semestre = ?", (pro_id, SEMESTRE_ID))
+
+        #Exclui o registro do professor.
+        c.execute("DELETE FROM pro_professor WHERE pro_id = ?", (pro_id,))
+    return None
