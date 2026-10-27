@@ -57,9 +57,9 @@ def conexao():
 
 def garantir_esquema():
     """
-    Confere que o banco foi criado (setup_db.py), cria as duas tabelas novas
-    usadas pelo front (restricoes de professor e horarios bloqueados) e
-    acrescenta as colunas de disponibilidade da tabela sal_sala, se faltarem.
+    Confere que o banco foi criado (setup_db.py), cria as tabelas novas
+    usadas pelo front e acrescenta as colunas de disponibilidade da tabela sal_sala
+    e de carga horária/eletiva na tabela dis_disciplina, se faltarem.
     A migracao nao apaga nem recria os dados existentes.
     """
     with conexao() as c:
@@ -76,6 +76,14 @@ def garantir_esquema():
                           "DEFAULT '%s'" % STATUS_DISPONIVEL)
             if "sal_motivo" not in colunas_sala:
                 c.execute("ALTER TABLE sal_sala ADD COLUMN sal_motivo TEXT")
+
+        # Verificação e migração de colunas na tabela dis_disciplina (DI01/DI04)
+        if "dis_disciplina" in existentes:
+            colunas_dis = {r[1] for r in c.execute("PRAGMA table_info(dis_disciplina)")}
+            if "dis_cargaHoraria" not in colunas_dis:
+                c.execute("ALTER TABLE dis_disciplina ADD COLUMN dis_cargaHoraria INT NOT NULL DEFAULT 60")
+            if "dis_eletiva" not in colunas_dis:
+                c.execute("ALTER TABLE dis_disciplina ADD COLUMN dis_eletiva INT NOT NULL DEFAULT 0")
                 
         for dia, slot in HORARIOS_DO_FRONT:
             if not c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?",
@@ -86,7 +94,7 @@ def garantir_esquema():
                     "INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) "
                     "VALUES (?, ?, ?, ?, ?)", (novo, dia, slot, ini, fim))
 
-        #Tabela de restrições.
+        # Tabela de restrições.
         if "res_restricao" not in existentes:
             c.execute("""
                 CREATE TABLE res_restricao (
@@ -101,7 +109,7 @@ def garantir_esquema():
             if "idsem_semestre" not in colunas_res:
                 c.execute("ALTER TABLE res_restricao ADD COLUMN idsem_semestre INT NOT NULL DEFAULT 1")
 
-        #Tabela de preferências.
+        # Tabela de preferências.
         if "pre_preferencia" not in existentes:
             c.execute("""
                 CREATE TABLE pre_preferencia (
@@ -130,7 +138,7 @@ def garantir_esquema():
                 """)
                 c.execute("DROP TABLE pre_preferencia_antigo")
 
-        #Tabela de bloqueios.
+        # Tabela de bloqueios.
         if "blq_bloqueio" not in existentes:
             c.execute("""
                 CREATE TABLE blq_bloqueio (
@@ -235,18 +243,84 @@ def _prof_id(nome):
 
 
 def disciplinas():
-    """{codigo: {nome, cor, id, periodo}} - cor 1..4 so para colorir a grade."""
+    """{codigo: {id, cod, nome, periodo, cor, carga_horaria, eletiva}}"""
     with conexao() as c:
         linhas = c.execute(
-            "SELECT dis_id, dis_codigo, dis_nome, idper_periodo FROM dis_disciplina "
-            "ORDER BY dis_nome").fetchall()
+            "SELECT dis_id, dis_codigo, dis_nome, idper_periodo, dis_cargaHoraria, dis_eletiva "
+            "FROM dis_disciplina ORDER BY dis_nome").fetchall()
     return {
         r["dis_codigo"]: {
-            "id": r["dis_id"], "nome": r["dis_nome"],
-            "periodo": r["idper_periodo"], "cor": (r["dis_id"] % 4) + 1,
+            "id": r["dis_id"],
+            "cod": r["dis_codigo"],
+            "nome": r["dis_nome"],
+            "periodo": r["idper_periodo"],
+            "cor": (r["dis_id"] % 4) + 1,
+            "carga_horaria": r["dis_cargaHoraria"],
+            "eletiva": bool(r["dis_eletiva"]),
         } for r in linhas
     }
 
+def buscar_disciplina(dis_id):
+    for dis in disciplinas().values():
+        if dis["id"] == dis_id:
+            return dis
+    return None
+
+
+def criar_disciplina(codigo, nome, periodo, carga, eletiva):
+    codigo = (codigo or "").strip().upper()
+    nome = (nome or "").strip()
+    
+    if not codigo or not nome or carga is None or carga <= 0:
+        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero."
+    if not eletiva and not periodo:
+        return "Disciplinas não eletivas exigem a seleção de um período curricular específico."
+        
+    with conexao() as c:
+        if c.execute("SELECT 1 FROM dis_disciplina WHERE dis_codigo = ?", (codigo,)).fetchone():
+            return f"O código '{codigo}' já está em uso por outra disciplina."
+            
+        novo = (c.execute("SELECT MAX(dis_id) FROM dis_disciplina").fetchone()[0] or 0) + 1
+        c.execute(
+            "INSERT INTO dis_disciplina (dis_id, dis_codigo, dis_nome, idper_periodo, dis_cargaHoraria, dis_eletiva) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (novo, codigo, nome, periodo, carga, 1 if eletiva else 0)
+        )
+    return None
+
+def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
+    codigo = (codigo or "").strip().upper()
+    nome = (nome or "").strip()
+    
+    if not codigo or not nome or carga is None or carga <= 0:
+        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero."
+    if not eletiva and not periodo:
+        return "Disciplinas não eletivas exigem a seleção de um período curricular específico."
+        
+    with conexao() as c:
+        if c.execute("SELECT 1 FROM dis_disciplina WHERE dis_codigo = ? AND dis_id <> ?", (codigo, dis_id)).fetchone():
+            return f"O código '{codigo}' já está em uso por outra disciplina."
+            
+        c.execute(
+            "UPDATE dis_disciplina SET dis_codigo = ?, dis_nome = ?, idper_periodo = ?, dis_cargaHoraria = ?, dis_eletiva = ? "
+            "WHERE dis_id = ?",
+            (codigo, nome, periodo, carga, 1 if eletiva else 0, dis_id)
+        )
+    return None
+
+def excluir_disciplina(dis_id):
+    with conexao() as c:
+        turmas_vinculadas = c.execute(
+            "SELECT tur_codigo FROM tur_turma WHERE iddis_disciplina = ? AND idsem_semestre = ?",
+            (dis_id, SEMESTRE_ID)
+        ).fetchall()
+        
+        if turmas_vinculadas:
+            codigos = ", ".join([r[0] for r in turmas_vinculadas])
+            return f"A exclusão foi impedida pois a disciplina possui turmas vinculadas no semestre ativo ({codigos}). Remova as turmas ou altere a disciplina associada a elas antes de prosseguir."
+            
+        c.execute("DELETE FROM dis_disciplina WHERE dis_id = ?", (dis_id,))
+    return None
 
 def turmas():
     with conexao() as c:

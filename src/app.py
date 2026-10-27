@@ -620,6 +620,75 @@ def exportar_pdf():
         headers={"Content-Disposition": "attachment; filename=%s" % nome},
     )
 
+#Cadastro de Disciplinas
+
+#Tela principal de listagem das disciplinas.
+@app.route("/disciplinas")
+def listar_disciplinas():
+    lista = list(repo.disciplinas().values())
+    return render_template(
+        "disciplinas.html", 
+        semestre=repo.semestre(),
+        disciplinas=lista,
+        periodos=repo.PERIODOS
+    )
+
+@app.route("/disciplinas/nova", methods=["POST"])
+def nova_disciplina():
+    codigo = request.form.get("codigo")
+    nome = request.form.get("nome")
+    periodo_raw = request.form.get("periodo")
+    carga_raw = request.form.get("carga_horaria")
+    eletiva = request.form.get("eletiva") == "Sim"
+    
+    periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
+    carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
+    
+    erro = repo.criar_disciplina(codigo, nome, periodo, carga, eletiva)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Disciplina cadastrada com sucesso.", "ok")
+        
+    return redirect(url_for("listar_disciplinas"))
+
+@app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
+def editar_disciplina(dis_id):
+    disciplina = repo.buscar_disciplina(dis_id)
+    if not disciplina:
+        flash("Disciplina não encontrada.", "erro")
+        return redirect(url_for("listar_disciplinas"))
+        
+    if request.method == "POST":
+        codigo = request.form.get("codigo")
+        nome = request.form.get("nome")
+        periodo_raw = request.form.get("periodo")
+        carga_raw = request.form.get("carga_horaria")
+        eletiva = request.form.get("eletiva") == "Sim"
+        
+        periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
+        carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
+        
+        erro = repo.atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva)
+        if erro:
+            flash(erro, "erro")
+            valores = {"cod": codigo, "nome": nome, "periodo": periodo_raw, "carga_horaria": carga_raw, "eletiva": eletiva}
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=valores, periodos=repo.PERIODOS)
+            
+        flash("Disciplina atualizada com sucesso.", "ok")
+        return redirect(url_for("listar_disciplinas"))
+        
+    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=disciplina, periodos=repo.PERIODOS)
+
+@app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
+def excluir_disciplina(dis_id):
+    erro = repo.excluir_disciplina(dis_id)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Disciplina excluída com sucesso.", "ok")
+    return redirect(url_for("listar_disciplinas"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
