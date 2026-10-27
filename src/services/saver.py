@@ -9,85 +9,91 @@ def alocar_salas(db_path, grafo, ordem_alocacao):
     #Conecta ao banco de dados.
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    try:
     
-    #Busca as salas disponíveis (SA06: indisponíveis não entram na geração).
-    cursor.execute(
+        #Busca as salas disponíveis (SA06: indisponíveis não entram na geração).
+        cursor.execute(
         "SELECT sal_id, sal_bloco, sal_numero FROM sal_sala "
         "WHERE sal_status = ? ORDER BY sal_id",
         ("Disponível",))
-    salas_disponiveis = cursor.fetchall()
+        salas_disponiveis = cursor.fetchall()
     
     #Busca qual o maior ID atual na tabela de alocação para não haver duplicidade de chave primária.
-    cursor.execute("SELECT MAX(alo_id) FROM alo_alocacaoHorarioSala")
-    max_id = cursor.fetchone()[0] #Extrai o maior ID encontrado
-    next_id = (max_id or 0) + 1 #Define o próximo ID a ser usado.
+        cursor.execute("SELECT MAX(alo_id) FROM alo_alocacaoHorarioSala")
+        max_id = cursor.fetchone()[0] #Extrai o maior ID encontrado
+        next_id = (max_id or 0) + 1 #Define o próximo ID a ser usado.
     
-    ocupacao_salas = {}  #Dicionário para controlar salas usadas e seus horários.
-    turmas_sem_sala = [] #Lista para registrar turmas que não encontraram sala.
-    novas_alocacoes = [] #Lista para guardar as alocações na memória antes de salvar.
+        ocupacao_salas = {}  #Dicionário para controlar salas usadas e seus horários.
+        turmas_sem_sala = [] #Lista para registrar turmas que não encontraram sala.
+        novas_alocacoes = [] #Lista para guardar as alocações na memória antes de salvar.
     
     #Percorre as turmas.
-    for tur_id in ordem_alocacao:
-        turma = grafo.vertice_turmas[tur_id] #Pega a turma atual.
+        for tur_id in ordem_alocacao:
+            turma = grafo.vertice_turmas[tur_id] #Pega a turma atual.
         
         #Pula se a turma não teve horários alocados.
-        if not turma.horarios_alocados:
-            continue
+            if not turma.horarios_alocados:
+                continue
             
-        sala_escolhida = None
+            sala_escolhida = None
         
         #Tenta achar uma sala livre nos horários daquela turma.
-        for sala in salas_disponiveis:
-            sal_id = sala[0]       #Pega o ID da sala atual.
-            sala_livre = True      #Assume que está livre.
+            for sala in salas_disponiveis:
+                sal_id = sala[0]       #Pega o ID da sala atual.
+                sala_livre = True      #Assume que está livre.
             
             #Testa todos os horários da turma para essa sala.
-            for h in turma.horarios_alocados:
+                for h in turma.horarios_alocados:
                 #Se o ID da sala já está na lista de ocupados daquele horário.
-                if sal_id in ocupacao_salas.get(h, []):
-                    sala_livre = False 
-                    break               
+                    if sal_id in ocupacao_salas.get(h, []):
+                        sala_livre = False
+                        break
                     
             #Se a sala está livre.
-            if sala_livre:
-                sala_escolhida = sal_id
-                break                  
+                if sala_livre:
+                    sala_escolhida = sal_id
+                    break
                 
         #Se encontrou uma sala viável para a turma
-        if sala_escolhida:
+            if sala_escolhida:
             #Associa a sala escolhida para cada horário da turma
-            for h in turma.horarios_alocados:
+                for h in turma.horarios_alocados:
                 #Se o horário não tem registros de sala, cria a lista vazia.
-                if h not in ocupacao_salas:
-                    ocupacao_salas[h] = []
+                    if h not in ocupacao_salas:
+                        ocupacao_salas[h] = []
                 #Adiciona a sala na lista de ocupados daquele horário.
-                ocupacao_salas[h].append(sala_escolhida)
+                    ocupacao_salas[h].append(sala_escolhida)
                 
                 #Guarda a alocação na memória, mas não salva no banco ainda.
-                novas_alocacoes.append((next_id, tur_id, sala_escolhida, h))
-                next_id += 1 #Incrementa o ID da chave primária.
-        else:
+                    novas_alocacoes.append((next_id, tur_id, sala_escolhida, h))
+                    next_id += 1 #Incrementa o ID da chave primária.
+            else:
             #Registra que a turma ficou sem sala (sem sala viável).
-            turmas_sem_sala.append(turma)
+                turmas_sem_sala.append(turma)
             
 
-    #Pega os IDs de todas as turmas desse semestre.
-    cursor.execute("SELECT tur_id FROM tur_turma")
-    turmas_do_semestre = [t[0] for t in cursor.fetchall()]
-    
-    if turmas_do_semestre:
-        #Exclui com segurança apenas as alocações das turmas desse semestre.
-        placeholders = ','.join('?' for _ in turmas_do_semestre)
-        cursor.execute(f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})", turmas_do_semestre)
-    
-    #Insere a nova alocação.
-    for alocacao in novas_alocacoes:
-        cursor.execute(
-            "INSERT INTO alo_alocacaoHorarioSala (alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
-            alocacao
-        )
-    conn.commit()
-    conn.close()
-    
-    #Retorna as turmas que falharam em conseguir sala.
-    return turmas_sem_sala
+        if turmas_sem_sala:
+            conn.rollback()
+            return turmas_sem_sala
+
+        turmas_envolvidas = list(dict.fromkeys(ordem_alocacao))
+        if turmas_envolvidas:
+            placeholders = ','.join('?' for _ in turmas_envolvidas)
+            cursor.execute(
+                f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
+                turmas_envolvidas,
+            )
+
+        for alocacao in novas_alocacoes:
+            cursor.execute(
+                "INSERT INTO alo_alocacaoHorarioSala "
+                "(alo_id, idtur_turma, idsal_sala, idhor_horario) VALUES (?, ?, ?, ?)",
+                alocacao,
+            )
+        conn.commit()
+        return turmas_sem_sala
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
