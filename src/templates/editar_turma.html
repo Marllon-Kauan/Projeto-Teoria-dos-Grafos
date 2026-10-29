@@ -6,6 +6,8 @@
   <a class="btn" href="{{ url_for('turmas') }}">Voltar para turmas</a>
   <span class="sep"></span>
   <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('listar_professores') }}">Professores</a>
+  <a class="btn" href="{{ url_for('listar_disciplinas') }}">Disciplinas</a>
   <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
   <a class="btn" href="{{ url_for('salas') }}">Salas</a>
 </nav>
@@ -98,7 +100,7 @@
       </div>
 
       <p class="nota largo">
-        Ao trocar a disciplina, as alocações atuais são removidas. Use
+        Ao trocar a disciplina ou o professor, as alocações atuais são removidas. Use
         “Gerar grade” para alocar a turma novamente.
       </p>
 

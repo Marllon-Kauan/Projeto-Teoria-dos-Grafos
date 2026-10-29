@@ -629,37 +629,143 @@ EMAIL_REGEX = r"^[\w\.-]+@[\w\.-]+\.\w+$"
 def email_valido(email):
     return bool(re.match(EMAIL_REGEX, email or ""))
 
-#Tela principal de listagem dos professores.
-@app.route("/professores")
-def listar_professores():
+
+def _render_professores(valores=None):
     return render_template(
         "professores.html",
         semestre=repo.semestre(),
-        professores=repo.professores_detalhados()
+        professores=repo.professores_detalhados(),
+        valores=valores or {},
     )
+
+
+def _render_disciplinas(valores=None):
+    return render_template(
+        "disciplinas.html",
+        semestre=repo.semestre(),
+        disciplinas=list(repo.disciplinas().values()),
+        periodos=repo.PERIODOS,
+        valores=valores or {},
+    )
+
+
+def _disciplina_formulario(origem):
+    """Valida e normaliza os campos da tela de disciplinas."""
+    codigo = (origem.get("codigo") or "").strip().upper()
+    nome = (origem.get("nome") or "").strip()
+    periodo_texto = (origem.get("periodo") or "").strip()
+    carga_texto = (origem.get("carga") or "").strip()
+    eletiva = origem.get("eletiva") == "1"
+    valores = {
+        "codigo": codigo, "nome": nome, "periodo": periodo_texto,
+        "carga": carga_texto, "eletiva": "1" if eletiva else "0",
+    }
+    if not codigo or not nome or not carga_texto:
+        return valores, None, "Preencha todos os campos obrigatórios."
+    try:
+        carga = int(carga_texto)
+    except ValueError:
+        return valores, None, "A carga horária deve ser um número inteiro maior que zero."
+    if carga <= 0:
+        return valores, None, "A carga horária deve ser maior que zero."
+    if periodo_texto:
+        if not periodo_texto.isdigit() or int(periodo_texto) not in repo.PERIODOS:
+            return valores, None, "Selecione um período curricular válido."
+        periodo = int(periodo_texto)
+    else:
+        periodo = None
+    if not eletiva and periodo is None:
+        return valores, None, "Disciplinas não eletivas exigem um período curricular específico."
+    return valores, (codigo, nome, periodo, carga, eletiva), None
+
+
+def _valores_disciplina(disciplina):
+    return {
+        "codigo": disciplina["cod"],
+        "nome": disciplina["nome"],
+        "periodo": "" if disciplina["periodo"] is None else str(disciplina["periodo"]),
+        "carga": str(disciplina["carga_horaria"]),
+        "eletiva": "1" if disciplina["eletiva"] else "0",
+    }
+
+#Tela principal de listagem dos professores.
+@app.route("/professores")
+def listar_professores():
+    return _render_professores()
 
 
 #Cadastro de novo professor
 @app.route("/professores/novo", methods=["POST"])
 def novo_professor():
-    nome = request.form.get("nome")
-    email = request.form.get("email")
+    nome = (request.form.get("nome") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    valores = {"nome": nome, "email": email}
 
     if not nome or not email:
         flash("Preencha todos os campos obrigatórios.", "erro")
-        return redirect(url_for("listar_professores"))
+        return _render_professores(valores)
 
     if not email_valido(email):
         flash("Informe um e-mail em formato válido (ex: professor@upe.br).", "erro")
-        return redirect(url_for("listar_professores"))
+        return _render_professores(valores)
 
     erro = repo.criar_professor(nome, email)
     if erro:
         flash(erro, "erro")
+        return _render_professores(valores)
     else:
         flash("Professor cadastrado com sucesso.", "ok")
 
     return redirect(url_for("listar_professores"))
+
+
+@app.route("/disciplinas")
+def listar_disciplinas():
+    return _render_disciplinas()
+
+
+@app.route("/disciplinas/nova", methods=["POST"])
+def nova_disciplina():
+    valores, dados, erro = _disciplina_formulario(request.form)
+    if erro:
+        flash(erro, "erro")
+        return _render_disciplinas(valores)
+    erro = repo.criar_disciplina(*dados)
+    if erro:
+        flash(erro, "erro")
+        return _render_disciplinas(valores)
+    flash("Disciplina cadastrada com sucesso.", "ok")
+    return redirect(url_for("listar_disciplinas"))
+
+
+@app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
+def editar_disciplina(dis_id):
+    disciplina = repo.buscar_disciplina(dis_id)
+    if not disciplina:
+        flash("Disciplina não encontrada.", "erro")
+        return redirect(url_for("listar_disciplinas"))
+    if request.method == "POST":
+        valores, dados, erro = _disciplina_formulario(request.form)
+        if erro:
+            flash(erro, "erro")
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
+        erro = repo.atualizar_disciplina(dis_id, *dados)
+        if erro:
+            flash(erro, "erro")
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
+        flash("Disciplina atualizada com sucesso.", "ok")
+        return redirect(url_for("listar_disciplinas"))
+    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=_valores_disciplina(disciplina))
+
+
+@app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
+def excluir_disciplina(dis_id):
+    erro = repo.excluir_disciplina(dis_id)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Disciplina excluída com sucesso.", "ok")
+    return redirect(url_for("listar_disciplinas"))
 
 
 #Edição dos dados do professor

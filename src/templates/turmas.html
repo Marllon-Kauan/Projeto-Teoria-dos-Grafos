@@ -6,6 +6,8 @@
   <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
   <span class="sep"></span>
   <a class="btn ativo" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('listar_professores') }}">Professores</a>
+  <a class="btn" href="{{ url_for('listar_disciplinas') }}">Disciplinas</a>
   <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
   <a class="btn" href="{{ url_for('salas') }}">Salas</a>
 </nav>
@@ -57,6 +59,7 @@
       <div class="campo">
         <label for="cod">Disciplina</label>
         <select name="cod" id="cod" required>
+          <option value="" selected disabled>Selecione a disciplina</option>
           {% for cod, d in disciplinas.items() %}
             <option value="{{ cod }}">{{ cod }} — {{ d.nome }}</option>
           {% endfor %}
@@ -71,6 +74,7 @@
       <div class="campo">
         <label for="prof">Professor</label>
         <select name="prof" id="prof" required>
+          <option value="" selected disabled>Selecione o professor</option>
           {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
         </select>
       </div>

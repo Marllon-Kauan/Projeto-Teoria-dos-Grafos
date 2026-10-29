@@ -45,8 +45,10 @@ def gerar_grade(db_path, id_semestre, horarios_bloqueados, restricoes_prof, limi
     #Executa a alocação passando o mapa de horários.
     sem_horario = alocar_horarios(grafo, ordem, horarios_do_banco)
     
-    #Aloca as salas com o resultado.
-    sem_sala = alocar_salas(db_path, grafo, ordem)
+    # Só persiste salas quando todas as turmas receberam horário.
+    sem_sala = []
+    if not sem_horario:
+        sem_sala = alocar_salas(db_path, grafo, ordem)
 
     turmas_com_erro = []
     
