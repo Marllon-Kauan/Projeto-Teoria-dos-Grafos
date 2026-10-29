@@ -271,8 +271,9 @@ def criar_disciplina(codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
     
-    if not codigo or not nome or carga is None or carga <= 0:
-        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero."
+    # Validação Carga horária deve ser >= 15 e múltipla de 15
+    if not codigo or not nome or carga is None or carga < 15 or carga % 15 != 0:
+        return "A carga horária deve ser informada em horas, maior ou igual a 15h e múltipla de 15 (ex: 15, 30, 45, 60)."
     if not eletiva and not periodo:
         return "Disciplinas não eletivas exigem a seleção de um período curricular específico."
         
@@ -293,14 +294,14 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
     
-    if not codigo or not nome or carga is None or carga <= 0:
-        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero.", None
+    #Validação da carga horária deve ser >= 15 e múltipla de 15.
+    if not codigo or not nome or carga is None or carga < 15 or carga % 15 != 0:
+        return "A carga horária deve ser informada em horas, maior ou igual a 15h e múltipla de 15 (ex: 15, 30, 45, 60).", None
     if not eletiva and not periodo:
         return "Disciplinas não eletivas exigem a seleção de um período curricular específico.", None
         
     aviso = None
     with conexao() as c:
-        #Busca os dados atuais antes de atualizar para comparar alterações.
         atual = c.execute(
             "SELECT dis_codigo, dis_cargaHoraria, idper_periodo FROM dis_disciplina WHERE dis_id = ?",
             (dis_id,)
@@ -321,7 +322,6 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
             (codigo, nome, periodo, carga, 1 if eletiva else 0, dis_id)
         )
 
-        #Se mudou a carga horaria ou o período, deleta as alocações existentes das turmas afetadas no semestre ativo
         if mudou_carga or mudou_periodo:
             turmas_ids = [
                 r[0] for r in c.execute(

@@ -726,16 +726,22 @@ def listar_disciplinas():
 
 @app.route("/disciplinas/nova", methods=["POST"])
 def nova_disciplina():
-    valores, dados, erro = _disciplina_formulario(request.form)
+    codigo = request.form.get("codigo")
+    nome = request.form.get("nome")
+    periodo_raw = request.form.get("periodo")
+    carga_raw = request.form.get("carga")
+    eletiva = request.form.get("eletiva") == "1"
+    
+    periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
+    carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
+    
+    erro = repo.criar_disciplina(codigo, nome, periodo, carga, eletiva)
     if erro:
         flash(erro, "erro")
-        return _render_disciplinas(valores)
-    erro = repo.criar_disciplina(*dados)
-    if erro:
-        flash(erro, "erro")
-        return _render_disciplinas(valores)
-    flash("Disciplina cadastrada com sucesso.", "ok")
-    return redirect(url_for("listar_disciplinas"))
+    else:
+        flash("Disciplina cadastrada com sucesso.", "ok")
+        
+    return redirect(url_for('listar_disciplinas'))
 
 
 @app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
@@ -744,17 +750,25 @@ def editar_disciplina(dis_id):
     if not disciplina:
         flash("Disciplina não encontrada.", "erro")
         return redirect(url_for("listar_disciplinas"))
+
     if request.method == "POST":
         valores, dados, erro = _disciplina_formulario(request.form)
         if erro:
             flash(erro, "erro")
             return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
-        erro = repo.atualizar_disciplina(dis_id, *dados)
+
+        #Captura erro e aviso retornados pelo repositório
+        erro, aviso = repo.atualizar_disciplina(dis_id, *dados)
         if erro:
             flash(erro, "erro")
             return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
-        flash("Disciplina atualizada com sucesso.", "ok")
+
+        mensagem = "Disciplina atualizada com sucesso."
+        if aviso:
+            mensagem += " " + aviso
+        flash(mensagem, "ok")
         return redirect(url_for("listar_disciplinas"))
+
     return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=_valores_disciplina(disciplina))
 
 
@@ -813,37 +827,6 @@ def excluir_professor(pro_id):
     return redirect(url_for("listar_professores"))
 
 
-#Cadastro de Disciplinas.
-@app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
-def editar_disciplina(dis_id):
-    disciplina = repo.buscar_disciplina(dis_id)
-    if not disciplina:
-        flash("Disciplina não encontrada.", "erro")
-        return redirect(url_for("listar_disciplinas"))
-        
-    if request.method == "POST":
-        codigo = request.form.get("codigo")
-        nome = request.form.get("nome")
-        periodo_raw = request.form.get("periodo")
-        carga_raw = request.form.get("carga_horaria")
-        eletiva = request.form.get("eletiva") == "Sim"
-        
-        periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
-        carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
-        
-        erro, aviso = repo.atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva)
-        if erro:
-            flash(erro, "erro")
-            valores = {"cod": codigo, "nome": nome, "periodo": periodo_raw, "carga_horaria": carga_raw, "eletiva": eletiva}
-            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=valores, periodos=repo.PERIODOS)
-            
-        mensagem = "Disciplina atualizada com sucesso."
-        if aviso:
-            mensagem += " " + aviso
-        flash(mensagem, "ok")
-        return redirect(url_for("listar_disciplinas"))
-        
-    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=disciplina, periodos=repo.PERIODOS)
 
 
 if __name__ == "__main__":
