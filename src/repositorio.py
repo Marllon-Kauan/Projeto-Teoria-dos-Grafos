@@ -784,6 +784,10 @@ def criar_professor(nome, email):
     with conexao() as c:
         if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_email) = ?", (email,)).fetchone():
             return f"O e-mail '{email}' já está cadastrado para outro professor."
+            
+        #Valida nome único.
+        if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_nome) = ?", (nome.lower(),)).fetchone():
+            return f"O professor '{nome}' já está cadastrado."
 
         novo = (c.execute("SELECT MAX(pro_id) FROM pro_professor").fetchone()[0] or 0) + 1
         c.execute(
@@ -803,6 +807,10 @@ def atualizar_professor(pro_id, nome, email):
     with conexao() as c:
         if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_email) = ? AND pro_id <> ?", (email, pro_id)).fetchone():
             return f"O e-mail '{email}' já está cadastrado para outro professor."
+            
+        #Valida nome único.
+        if c.execute("SELECT 1 FROM pro_professor WHERE LOWER(pro_nome) = ? AND pro_id <> ?", (nome.lower(), pro_id)).fetchone():
+            return f"O professor '{nome}' já está cadastrado."
 
         cursor = c.execute(
             "UPDATE pro_professor SET pro_nome = ?, pro_email = ? WHERE pro_id = ?",
