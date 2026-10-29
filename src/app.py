@@ -707,5 +707,38 @@ def excluir_professor(pro_id):
     return redirect(url_for("listar_professores"))
 
 
+#Cadastro de Disciplinas.
+@app.route("/disciplinas/<int:dis_id>/editar", methods=["GET", "POST"])
+def editar_disciplina(dis_id):
+    disciplina = repo.buscar_disciplina(dis_id)
+    if not disciplina:
+        flash("Disciplina não encontrada.", "erro")
+        return redirect(url_for("listar_disciplinas"))
+        
+    if request.method == "POST":
+        codigo = request.form.get("codigo")
+        nome = request.form.get("nome")
+        periodo_raw = request.form.get("periodo")
+        carga_raw = request.form.get("carga_horaria")
+        eletiva = request.form.get("eletiva") == "Sim"
+        
+        periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
+        carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
+        
+        erro, aviso = repo.atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva)
+        if erro:
+            flash(erro, "erro")
+            valores = {"cod": codigo, "nome": nome, "periodo": periodo_raw, "carga_horaria": carga_raw, "eletiva": eletiva}
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=valores, periodos=repo.PERIODOS)
+            
+        mensagem = "Disciplina atualizada com sucesso."
+        if aviso:
+            mensagem += " " + aviso
+        flash(mensagem, "ok")
+        return redirect(url_for("listar_disciplinas"))
+        
+    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, valores=disciplina, periodos=repo.PERIODOS)
+
+
 if __name__ == "__main__":
     app.run(debug=True)

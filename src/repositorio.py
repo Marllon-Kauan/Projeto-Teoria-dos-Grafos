@@ -288,25 +288,63 @@ def criar_disciplina(codigo, nome, periodo, carga, eletiva):
         )
     return None
 
+#Atualiza dados da disciplina.
 def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
     
     if not codigo or not nome or carga is None or carga <= 0:
-        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero."
+        return "Preencha os campos obrigatórios e informe uma carga horária maior que zero.", None
     if not eletiva and not periodo:
-        return "Disciplinas não eletivas exigem a seleção de um período curricular específico."
+        return "Disciplinas não eletivas exigem a seleção de um período curricular específico.", None
         
+    aviso = None
     with conexao() as c:
+        #Busca os dados atuais antes de atualizar para comparar alterações.
+        atual = c.execute(
+            "SELECT dis_codigo, dis_cargaHoraria, idper_periodo FROM dis_disciplina WHERE dis_id = ?",
+            (dis_id,)
+        ).fetchone()
+        
+        if not atual:
+            return "Disciplina não encontrada.", None
+
         if c.execute("SELECT 1 FROM dis_disciplina WHERE dis_codigo = ? AND dis_id <> ?", (codigo, dis_id)).fetchone():
-            return f"O código '{codigo}' já está em uso por outra disciplina."
+            return f"O código '{codigo}' já está em uso por outra disciplina.", None
+            
+        mudou_carga = atual["dis_cargaHoraria"] != carga
+        mudou_periodo = atual["idper_periodo"] != periodo
             
         c.execute(
             "UPDATE dis_disciplina SET dis_codigo = ?, dis_nome = ?, idper_periodo = ?, dis_cargaHoraria = ?, dis_eletiva = ? "
             "WHERE dis_id = ?",
             (codigo, nome, periodo, carga, 1 if eletiva else 0, dis_id)
         )
-    return None
+
+        #Se mudou a carga horaria ou o período, deleta as alocações existentes das turmas afetadas no semestre ativo
+        if mudou_carga or mudou_periodo:
+            turmas_ids = [
+                r[0] for r in c.execute(
+                    "SELECT tur_id FROM tur_turma WHERE iddis_disciplina = ? AND idsem_semestre = ?",
+                    (dis_id, SEMESTRE_ID)
+                ).fetchall()
+            ]
+            
+            if turmas_ids:
+                placeholders = ",".join("?" * len(turmas_ids))
+                alocacoes = c.execute(
+                    f"SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
+                    turmas_ids
+                ).fetchone()[0]
+                
+                if alocacoes > 0:
+                    c.execute(
+                        f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
+                        turmas_ids
+                    )
+                    aviso = "As alocações das turmas vinculadas foram removidas devido às alterações na disciplina; use \"Gerar grade\" para alocá-las novamente."
+
+    return None, aviso
 
 def excluir_disciplina(dis_id):
     with conexao() as c:
