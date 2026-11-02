@@ -827,6 +827,60 @@ def excluir_professor(pro_id):
     return redirect(url_for("listar_professores"))
 
 
+#Cadastro de horários
+@app.route("/horarios")
+def listar_horarios():
+    return render_template(
+        "horarios.html",
+        semestre=repo.semestre(),
+        horarios=repo.listar_horarios_cadastrados(),
+        dias_map=repo.DIA_POR_NUM
+    )
+
+@app.route("/horarios/novo", methods=["POST"])
+def novo_horario():
+    dia = request.form.get("dia")
+    slot = request.form.get("slot")
+    inicio = request.form.get("inicio")
+    fim = request.form.get("fim")
+
+    erro = repo.criar_horario(dia, slot, inicio, fim)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Horário cadastrado com sucesso. Lembre-se de gerar uma nova grade.", "ok")
+
+@app.route("/horarios/<int:hor_id>/editar", methods=["GET", "POST"])
+def editar_horario(hor_id):
+    horario = repo.buscar_horario(hor_id)
+    if not horario:
+        flash("Horário não encontrado.", "erro")
+        return redirect(url_for("listar_horarios"))
+
+    if request.method == "POST":
+        inicio = request.form.get("inicio")
+        fim = request.form.get("fim")
+        
+        erro = repo.atualizar_horario(hor_id, inicio, fim)
+        if erro:
+            flash(erro, "erro")
+            return render_template("editar_horario.html", semestre=repo.semestre(), horario=horario)
+            
+        flash("Horário atualizado com sucesso.", "ok")
+        return redirect(url_for("listar_horarios"))
+
+    return render_template("editar_horario.html", semestre=repo.semestre(), horario=horario)
+
+@app.route("/horarios/<int:hor_id>/excluir", methods=["POST"])
+def excluir_horario(hor_id):
+    erro = repo.excluir_horario(hor_id)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Horário excluído com sucesso.", "ok")
+    return redirect(url_for("listar_horarios"))
+
+
 
 
 if __name__ == "__main__":

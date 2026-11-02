@@ -845,3 +845,82 @@ def excluir_professor(pro_id):
         #Exclui o registro do professor.
         c.execute("DELETE FROM pro_professor WHERE pro_id = ?", (pro_id,))
     return None
+
+
+#Cadastro de horários.
+
+#Retorna todos os horários para a tela de listagem.
+def listar_horarios_cadastrados():
+    with conexao() as c:
+        linhas = c.execute(
+            "SELECT hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim "
+            "FROM hor_horario ORDER BY hor_diaSemana, hor_horaInicio"
+        ).fetchall()
+    return [{
+        "id": r["hor_id"],
+        "dia": r["hor_diaSemana"],
+        "slot": r["hor_slot"],
+        "inicio": _fmt_hora(r["hor_horaInicio"]),
+        "fim": _fmt_hora(r["hor_horaFim"])
+    } for r in linhas]
+
+def buscar_horario(hor_id):
+    with conexao() as c:
+        r = c.execute(
+            "SELECT hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim "
+            "FROM hor_horario WHERE hor_id = ?", (hor_id,)
+        ).fetchone()
+    if r:
+        return {
+            "id": r["hor_id"], "dia": r["hor_diaSemana"], "slot": r["hor_slot"],
+            "inicio": r["hor_horaInicio"], "fim": r["hor_horaFim"]
+        }
+    return None
+
+def criar_horario(dia_semana, slot, hora_inicio, hora_fim):
+    try:
+        dia_semana, hora_inicio, hora_fim = int(dia_semana), int(hora_inicio), int(hora_fim)
+    except ValueError:
+        return "Dia e horários devem ser numéricos."
+        
+    slot = (slot or "").strip().upper()
+    if not slot or len(slot) > 1:
+        return "O slot deve ser uma única letra (ex: A, B, C)."
+
+    with conexao() as c:
+        if c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?", (dia_semana, slot)).fetchone():
+            return f"O slot '{slot}' já existe para o dia selecionado."
+            
+        novo = (c.execute("SELECT MAX(hor_id) FROM hor_horario").fetchone()[0] or 0) + 1
+        c.execute(
+            "INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) "
+            "VALUES (?, ?, ?, ?, ?)", (novo, dia_semana, slot, hora_inicio, hora_fim)
+        )
+    return None
+
+def atualizar_horario(hor_id, hora_inicio, hora_fim):
+    try:
+        hora_inicio, hora_fim = int(hora_inicio), int(hora_fim)
+    except ValueError:
+        return "Os horários devem ser numéricos."
+
+    with conexao() as c:
+        cursor = c.execute(
+            "UPDATE hor_horario SET hor_horaInicio = ?, hor_horaFim = ? WHERE hor_id = ?",
+            (hora_inicio, hora_fim, hor_id)
+        )
+        if cursor.rowcount == 0:
+            return "Horário não encontrado."
+    return None
+
+def excluir_horario(hor_id):
+    with conexao() as c:
+        em_uso = c.execute(
+            "SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idhor_horario = ?", (hor_id,)
+        ).fetchone()[0]
+        
+        if em_uso > 0:
+            return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s)."
+            
+        c.execute("DELETE FROM hor_horario WHERE hor_id = ?", (hor_id,))
+    return None
