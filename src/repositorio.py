@@ -288,6 +288,18 @@ def buscar_disciplina(dis_id):
     return None
 
 
+def turmas_com_alocacoes_disciplina(dis_id):
+    """Turmas do semestre ativo que perderiam suas alocações numa alteração."""
+    with conexao() as c:
+        linhas = c.execute(
+            "SELECT DISTINCT T.tur_id, T.tur_codigo FROM tur_turma T "
+            "JOIN alo_alocacaoHorarioSala A ON A.idtur_turma = T.tur_id "
+            "WHERE T.iddis_disciplina = ? AND T.idsem_semestre = ? ORDER BY T.tur_codigo",
+            (dis_id, SEMESTRE_ID),
+        ).fetchall()
+    return [{"id": r["tur_id"], "codigo": r["tur_codigo"]} for r in linhas]
+
+
 def criar_disciplina(codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
@@ -315,7 +327,7 @@ def criar_disciplina(codigo, nome, periodo, carga, eletiva):
     return None
 
 #Atualiza dados da disciplina.
-def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
+def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva, confirmar=False):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
 
@@ -327,12 +339,12 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
     if not codigo or not nome or carga is None or carga < 15 or carga % 15 != 0:
         return "A carga horária deve ser informada em horas, maior ou igual a 15h e múltipla de 15 (ex: 15, 30, 45, 60).", None
     if not eletiva and not periodo:
-        return "Disciplinas não eletivas exigem a seleção de um período curricular específico.", None
+            return "Disciplinas não eletivas exigem a seleção de um período curricular específico.", None
 
     aviso = None
     with conexao() as c:
         atual = c.execute(
-            "SELECT dis_codigo, dis_cargaHoraria, idper_periodo FROM dis_disciplina WHERE dis_id = ?",
+            "SELECT dis_codigo, dis_cargaHoraria, idper_periodo, dis_eletiva FROM dis_disciplina WHERE dis_id = ?",
             (dis_id,)
         ).fetchone()
 
@@ -344,6 +356,19 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
 
         mudou_carga = atual["dis_cargaHoraria"] != carga
         mudou_periodo = atual["idper_periodo"] != periodo
+        mudou_eletiva = bool(atual["dis_eletiva"]) != bool(eletiva)
+        mudou_regra_grade = mudou_carga or mudou_periodo or mudou_eletiva
+
+        turmas_ids = []
+        if mudou_regra_grade:
+            turmas_ids = [r[0] for r in c.execute(
+                "SELECT DISTINCT T.tur_id FROM tur_turma T "
+                "JOIN alo_alocacaoHorarioSala A ON A.idtur_turma = T.tur_id "
+                "WHERE T.iddis_disciplina = ? AND T.idsem_semestre = ?",
+                (dis_id, SEMESTRE_ID),
+            ).fetchall()]
+            if turmas_ids and not confirmar:
+                return "Confirmação necessária para remover as alocações das turmas afetadas.", None
 
         c.execute(
             "UPDATE dis_disciplina SET dis_codigo = ?, dis_nome = ?, idper_periodo = ?, dis_cargaHoraria = ?, dis_eletiva = ? "
@@ -351,27 +376,13 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
             (codigo, nome, periodo, carga, 1 if eletiva else 0, dis_id)
         )
 
-        if mudou_carga or mudou_periodo:
-            turmas_ids = [
-                r[0] for r in c.execute(
-                    "SELECT tur_id FROM tur_turma WHERE iddis_disciplina = ? AND idsem_semestre = ?",
-                    (dis_id, SEMESTRE_ID)
-                ).fetchall()
-            ]
-
-            if turmas_ids:
-                placeholders = ",".join("?" * len(turmas_ids))
-                alocacoes = c.execute(
-                    f"SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
-                    turmas_ids
-                ).fetchone()[0]
-
-                if alocacoes > 0:
-                    c.execute(
-                        f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
-                        turmas_ids
-                    )
-                    aviso = "As alocações das turmas vinculadas foram removidas devido às alterações na disciplina; use \"Gerar grade\" para alocá-las novamente."
+        if turmas_ids:
+            placeholders = ",".join("?" * len(turmas_ids))
+            c.execute(f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})", turmas_ids)
+            codigos = ", ".join(r[0] for r in c.execute(
+                f"SELECT tur_codigo FROM tur_turma WHERE tur_id IN ({placeholders}) ORDER BY tur_codigo", turmas_ids
+            ).fetchall())
+            aviso = "As alocações das turmas %s foram removidas; use \"Gerar grade\" para alocá-las novamente." % codigos
 
     return None, aviso
 

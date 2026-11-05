@@ -32,6 +32,18 @@ class EntityManagementTemplateTests(unittest.TestCase):
         self.assertIn("url_for('excluir_disciplina'", listing)
         self.assertIn("Salvar alterações", editing)
         self.assertIn("Cancelar", editing)
+        self.assertIn("CCMP0000", listing)
+        self.assertIn("múltiplos de 15", listing)
+        self.assertIn("CCMP0000", editing)
+        self.assertIn("múltiplos de 15", editing)
+        self.assertIn("referência curricular", listing)
+        self.assertIn("referência curricular", editing)
+
+    def test_discipline_form_requires_confirmation_for_affected_allocations(self):
+        editing = self.read("editar_disciplina.html")
+        self.assertIn("turmas_afetadas", editing)
+        self.assertIn("confirmar_alocacoes", editing)
+        self.assertIn("As alocações serão removidas", editing)
 
     def test_navigation_exposes_both_new_pages(self):
         for name in ("index.html", "turmas.html", "restricoes.html", "salas.html"):
