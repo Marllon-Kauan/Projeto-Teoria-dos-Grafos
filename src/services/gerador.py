@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Roda o algoritmo completo (grafo -> horarios -> salas) e devolve o resultado pelo front.
 """
@@ -11,11 +10,10 @@ from services.saver import alocar_salas
 def _descricao(turma):
     return "Turma %s: %s (Prof: %s)" % (turma.tur_codigo, turma.dis_nome, turma.pro_nome)
 
-#Busca os horários do banco e gera uma ordem sequencial por dia. Helper da função maior_sequencia_no_dia.
 def _obter_horarios_do_banco(db_path):
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT hor_id, hor_diaSemana, hor_horaInicio FROM hor_horario ORDER BY hor_diaSemana, hor_horaInicio")
+        cursor.execute("SELECT hor_id, hor_diaSemana, hor_horaInicio, hor_horaFim FROM hor_horario ORDER BY hor_diaSemana, hor_horaInicio")
         
         horarios = []
         dia_atual = None
@@ -26,7 +24,13 @@ def _obter_horarios_do_banco(db_path):
                 dia_atual = r[1]
                 ordem = 0  
                 
-            horarios.append({"id": r[0], "dia": r[1], "ordem": ordem})
+            horarios.append({
+                "id": r[0],
+                "dia": r[1],
+                "ordem": ordem,
+                "inicio": r[2],
+                "fim": r[3]
+            })
             ordem += 1
             
         return horarios
@@ -35,12 +39,21 @@ def gerar_grade(db_path, id_semestre, horarios_bloqueados, restricoes_prof, limi
     if not isinstance(horarios_bloqueados, dict):
         horarios_bloqueados = set(horarios_bloqueados)
 
+    #Busca a lista de horários da base de dados.
+    horarios_do_banco = _obter_horarios_do_banco(db_path)
+
+    #Se não houver nenhum horário cadastrado no banco, interrompe a geração.
+    if not horarios_do_banco:
+        return {
+            "ok": False,
+            "parcial": False,
+            "sem_horarios": True,
+            "turmas": []
+        }
+
     #Constrói o grafo com os limites.
     grafo = construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_prof, limites_prof, horarios_alocaveis)
     ordem = ordenar_turmas(grafo)
-
-    #Busca a lista de horários da base de dados.
-    horarios_do_banco = _obter_horarios_do_banco(db_path)
 
     #Executa a alocação passando o mapa de horários.
     sem_horario = alocar_horarios(grafo, ordem, horarios_do_banco)

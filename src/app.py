@@ -207,10 +207,11 @@ def gerar():
         repo.DB_PATH, repo.SEMESTRE_ID, repo.bloqueados_por_periodo(), repo.restricoes_por_professor(),
         repo.limites_por_professor(), repo.ids_do_algoritmo())
 
-    if resultado["ok"]:
+    if resultado.get("sem_horarios"):
+        flash("Não é possível gerar a grade: é necessário cadastrar pelo menos um horário.", "erro")
+    elif resultado["ok"]:
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
     elif resultado.get("parcial"):
-        #Mostra o aviso de grade parcial e lista as turmas não alocadas.
         flash("Grade gerada parcialmente. Não foi possível alocar: " + "; ".join(resultado["turmas"]), "erro")
     else:
         flash("Erro ao gerar a grade.", "erro")
@@ -440,7 +441,7 @@ def nova_restricao():
     h = request.form.get("h")
     motivo = (request.form.get("motivo") or "").strip()
 
-    horarios_validos = [str(i) for i in range(7)] + ["todos"]
+    horarios_validos = [str(i) for i in range(len(repo.horarios()))] + ["todos"]
 
     if not (prof_id and prof_id.isdigit() and repo.buscar_professor(int(prof_id)) and dia in repo.DIAS and h in horarios_validos):
         flash("Preencha todos os campos da restrição.", "erro")
@@ -874,11 +875,14 @@ def editar_horario(hor_id):
 
 @app.route("/horarios/<int:hor_id>/excluir", methods=["POST"])
 def excluir_horario(hor_id):
-    erro = repo.excluir_horario(hor_id)
+    erro, aviso = repo.excluir_horario(hor_id)
     if erro:
         flash(erro, "erro")
     else:
-        flash("Horário excluído com sucesso.", "ok")
+        mensagem = "Horário excluído com sucesso."
+        if aviso:
+            mensagem += " " + aviso
+        flash(mensagem, "ok")
     return redirect(url_for("listar_horarios"))
 
 

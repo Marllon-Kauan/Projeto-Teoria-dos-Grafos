@@ -9,7 +9,7 @@ from collections import deque
 def criar_mapa_horarios(horarios_do_banco):
     return {h['id']: (h['dia'], h.get('ordem', i)) for i, h in enumerate(horarios_do_banco)}
 
-#Gera blocos duplos intercalando os dias da semana para evitar acúmulo no início da semana.
+#Gera blocos duplos apenas para faixas de horário estritamente consecutivas.
 def gerar_blocos_geminados(horarios_do_banco):
     agrupados_por_dia = {}
     for h in horarios_do_banco:
@@ -23,8 +23,23 @@ def gerar_blocos_geminados(horarios_do_banco):
             dias_ordem.append(dia)
         lista_ordenada = sorted(lista, key=lambda x: x.get('ordem', x['id']))
         blocos_por_dia[dia] = []
-        for i in range(0, len(lista_ordenada) - 1, 2):
-            blocos_por_dia[dia].append((lista_ordenada[i]['id'], lista_ordenada[i+1]['id']))
+        
+        i = 0
+        while i < len(lista_ordenada) - 1:
+            h1 = lista_ordenada[i]
+            h2 = lista_ordenada[i + 1]
+            
+            #Valida se o término do primeiro horário coincide com o início do segundo.
+            if h1.get('fim') is not None and h2.get('inicio') is not None:
+                sao_consecutivos = (h1['fim'] == h2['inicio'])
+            else:
+                sao_consecutivos = (h2.get('ordem', 0) == h1.get('ordem', 0) + 1)
+            
+            if sao_consecutivos:
+                blocos_por_dia[dia].append((h1['id'], h2['id']))
+                i += 2  
+            else:
+                i += 1 
             
     blocos = []
     max_blocos = max((len(b) for b in blocos_por_dia.values()), default=0)

@@ -187,23 +187,41 @@ def _fmt_hora(valor):
     s = str(valor).zfill(4)
     return "%s:%s" % (s[:2], s[2:])
 
-
+#Mapeia os horários ordenando estritamente por hor_horaInicio
 @lru_cache(maxsize=1)
 def _mapa_horarios():
     with conexao() as c:
+        #Busca todas as faixas distintas ordenadas pelo horário de início.
+        faixas_unicas = c.execute(
+            "SELECT DISTINCT hor_horaInicio, hor_horaFim "
+            "FROM hor_horario ORDER BY hor_horaInicio"
+        ).fetchall()
+        
+        #Mapeia para o seu índice cronológico.
+        ordem_faixas = {
+            (r["hor_horaInicio"], r["hor_horaFim"]): idx 
+            for idx, r in enumerate(faixas_unicas)
+        }
+        
         linhas = c.execute(
-            "SELECT hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim "
-            "FROM hor_horario ORDER BY hor_id").fetchall()
+            "SELECT hor_id, hor_diaSemana, hor_horaInicio, hor_horaFim "
+            "FROM hor_horario ORDER BY hor_horaInicio"
+        ).fetchall()
+
     por_id, por_dia_h, faixas = {}, {}, {}
     for r in linhas:
         dia = DIA_POR_NUM.get(r["hor_diaSemana"])
         if dia is None:
             continue
-        h = ord(r["hor_slot"]) - ord("A")          # A=0, B=1, ... F=5
+        h = ordem_faixas.get((r["hor_horaInicio"], r["hor_horaFim"]))
+        if h is None:
+            continue
         por_id[r["hor_id"]] = (dia, h)
         por_dia_h[(dia, h)] = r["hor_id"]
         faixas[h] = "%s - %s" % (_fmt_hora(r["hor_horaInicio"]), _fmt_hora(r["hor_horaFim"]))
-    return por_id, por_dia_h, [faixas[i] for i in sorted(faixas)]
+
+    faixas_ordenadas = [faixas[i] for i in sorted(faixas.keys())]
+    return por_id, por_dia_h, faixas_ordenadas
 
 
 def horarios():
@@ -704,7 +722,7 @@ def criar_restricao(pro_id, dia, h_val, motivo):
         return "erro"
 
     if h_val == "todos":
-        hids = [hor_id(dia, i) for i in range(7)]
+        hids = [hor_id(dia, i) for i in range(len(horarios()))]
     else:
         hids = [hor_id(dia, int(h_val))]
         
@@ -962,14 +980,66 @@ def atualizar_horario(hor_id, hora_inicio, hora_fim):
 
 def excluir_horario(hor_id):
     with conexao() as c:
-        faixa = c.execute("SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?", (hor_id,)).fetchone()
+        faixa = c.execute(
+            "SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?",
+            (hor_id,)
+        ).fetchone()
+
         if not faixa:
-            return "Horário não encontrado."
-        em_uso = c.execute("SELECT COUNT(*) FROM alo_alocacaoHorarioSala A JOIN hor_horario H ON H.hor_id = A.idhor_horario WHERE H.hor_horaInicio = ? AND H.hor_horaFim = ?", faixa).fetchone()[0]
-        
+            return "Horário não encontrado.", None
+
+        #Coleta todos os hor_id vinculados a essa mesma faixa em todos os dias da semana.
+        ids_horarios = [
+            r[0] for r in c.execute(
+                "SELECT hor_id FROM hor_horario WHERE hor_horaInicio = ? AND hor_horaFim = ?",
+                (faixa["hor_horaInicio"], faixa["hor_horaFim"])
+            ).fetchall()
+        ]
+
+        if not ids_horarios:
+            return "Horário não encontrado.", None
+
+        placeholders = ",".join("?" * len(ids_horarios))
+
+        #Impede exclusão se houver aulas alocadas na faixa.
+        em_uso = c.execute(
+            f"SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idhor_horario IN ({placeholders})",
+            ids_horarios
+        ).fetchone()[0]
+
         if em_uso > 0:
-            return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s). Remova ou transfira essas aulas antes."
-            
-        c.execute("DELETE FROM hor_horario WHERE hor_horaInicio = ? AND hor_horaFim = ?", faixa)
+            return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s). Remova ou transfira essas aulas antes.", None
+
+        #Contabiliza restrições e bloqueios vinculados antes da exclusão.
+        res_removidas = c.execute(
+            f"SELECT COUNT(*) FROM res_restricao WHERE idhor_horario IN ({placeholders})",
+            ids_horarios
+        ).fetchone()[0]
+
+        blq_removidos = c.execute(
+            f"SELECT COUNT(*) FROM blq_bloqueio WHERE idhor_horario IN ({placeholders})",
+            ids_horarios
+        ).fetchone()[0]
+
+        #Exclui restrições e bloqueios associados a esta faixa de horário.
+        c.execute(f"DELETE FROM res_restricao WHERE idhor_horario IN ({placeholders})", ids_horarios)
+        c.execute(f"DELETE FROM blq_bloqueio WHERE idhor_horario IN ({placeholders})", ids_horarios)
+
+        #Exclui a faixa de horário em todos os dias.
+        c.execute(
+            "DELETE FROM hor_horario WHERE hor_horaInicio = ? AND hor_horaFim = ?",
+            (faixa["hor_horaInicio"], faixa["hor_horaFim"])
+        )
+
     _mapa_horarios.cache_clear()
-    return None
+
+    aviso = None
+    if res_removidas > 0 or blq_removidos > 0:
+        detalhes = []
+        if res_removidas > 0:
+            detalhes.append(f"{res_removidas} restrição(ões) de professor")
+        if blq_removidos > 0:
+            detalhes.append(f"{blq_removidos} bloqueio(s) de período")
+        aviso = f"Atenção: foram removidos em cascata {' e '.join(detalhes)} associados a esta faixa."
+
+    return None, aviso
