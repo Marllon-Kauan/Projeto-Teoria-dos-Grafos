@@ -849,12 +849,43 @@ def excluir_professor(pro_id):
 
 #Cadastro de horários.
 
+def _hora_minutos(valor):
+    texto = str(valor or "").strip()
+    if len(texto) != 5 or texto[2] != ":":
+        return None
+    try:
+        hora, minuto = int(texto[:2]), int(texto[3:])
+    except ValueError:
+        return None
+    if not 0 <= hora <= 23 or not 0 <= minuto <= 59:
+        return None
+    return hora * 60 + minuto
+
+
+def validar_faixa_horario(inicio, fim, existentes):
+    inicio_min = _hora_minutos(inicio)
+    fim_min = _hora_minutos(fim)
+    if inicio_min is None or fim_min is None:
+        return "Informe os horários no formato HH:MM."
+    if fim_min <= inicio_min:
+        return "A hora de término deve ser posterior à hora de início."
+    for antigo_inicio, antigo_fim in existentes:
+        if isinstance(antigo_inicio, int) and antigo_inicio >= 100:
+            antigo_inicio = (antigo_inicio // 100) * 60 + antigo_inicio % 100
+        if isinstance(antigo_fim, int) and antigo_fim >= 100:
+            antigo_fim = (antigo_fim // 100) * 60 + antigo_fim % 100
+        if inicio_min < antigo_fim and fim_min > antigo_inicio:
+            return "A faixa informada se sobrepõe a outro horário cadastrado."
+    return None
+
 #Retorna todos os horários para a tela de listagem.
 def listar_horarios_cadastrados():
     with conexao() as c:
         linhas = c.execute(
-            "SELECT hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim "
-            "FROM hor_horario ORDER BY hor_diaSemana, hor_horaInicio"
+            "SELECT MIN(hor_id) AS hor_id, MIN(hor_diaSemana) AS hor_diaSemana, "
+            "MIN(hor_slot) AS hor_slot, hor_horaInicio, hor_horaFim "
+            "FROM hor_horario GROUP BY hor_horaInicio, hor_horaFim "
+            "ORDER BY hor_horaInicio, hor_horaFim"
         ).fetchall()
     return [{
         "id": r["hor_id"],
@@ -867,60 +898,63 @@ def listar_horarios_cadastrados():
 def buscar_horario(hor_id):
     with conexao() as c:
         r = c.execute(
-            "SELECT hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim "
-            "FROM hor_horario WHERE hor_id = ?", (hor_id,)
+            "SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?", (hor_id,)
         ).fetchone()
     if r:
         return {
-            "id": r["hor_id"], "dia": r["hor_diaSemana"], "slot": r["hor_slot"],
-            "inicio": r["hor_horaInicio"], "fim": r["hor_horaFim"]
+            "id": hor_id, "inicio": _fmt_hora(r["hor_horaInicio"]),
+            "fim": _fmt_hora(r["hor_horaFim"])
         }
     return None
 
-def criar_horario(dia_semana, slot, hora_inicio, hora_fim):
-    try:
-        dia_semana, hora_inicio, hora_fim = int(dia_semana), int(hora_inicio), int(hora_fim)
-    except ValueError:
-        return "Dia e horários devem ser numéricos."
-        
-    slot = (slot or "").strip().upper()
-    if not slot or len(slot) > 1:
-        return "O slot deve ser uma única letra (ex: A, B, C)."
-
+def criar_horario(hora_inicio, hora_fim):
+    inicio = _hora_minutos(hora_inicio)
+    fim = _hora_minutos(hora_fim)
     with conexao() as c:
-        if c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?", (dia_semana, slot)).fetchone():
-            return f"O slot '{slot}' já existe para o dia selecionado."
-            
+        existentes = [(r[0], r[1]) for r in c.execute(
+            "SELECT hor_horaInicio, hor_horaFim FROM hor_horario GROUP BY hor_horaInicio, hor_horaFim").fetchall()]
+        erro = validar_faixa_horario(hora_inicio, hora_fim, existentes)
+        if erro:
+            return erro
+        ultimo_slot = c.execute("SELECT MAX(hor_slot) FROM hor_horario").fetchone()[0]
+        slot = chr(ord(ultimo_slot) + 1) if ultimo_slot else "A"
+        if slot > "Z":
+            return "Não há slots disponíveis para uma nova faixa de horário."
         novo = (c.execute("SELECT MAX(hor_id) FROM hor_horario").fetchone()[0] or 0) + 1
-        c.execute(
-            "INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) "
-            "VALUES (?, ?, ?, ?, ?)", (novo, dia_semana, slot, hora_inicio, hora_fim)
-        )
+        for dia in sorted(DIA_POR_NUM):
+            c.execute("INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) VALUES (?, ?, ?, ?, ?)",
+                      (novo, dia, slot, inicio // 60 * 100 + inicio % 60, fim // 60 * 100 + fim % 60))
+            novo += 1
+    _mapa_horarios.cache_clear()
     return None
 
 def atualizar_horario(hor_id, hora_inicio, hora_fim):
-    try:
-        hora_inicio, hora_fim = int(hora_inicio), int(hora_fim)
-    except ValueError:
-        return "Os horários devem ser numéricos."
-
     with conexao() as c:
-        cursor = c.execute(
-            "UPDATE hor_horario SET hor_horaInicio = ?, hor_horaFim = ? WHERE hor_id = ?",
-            (hora_inicio, hora_fim, hor_id)
-        )
-        if cursor.rowcount == 0:
+        atual = c.execute("SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?", (hor_id,)).fetchone()
+        if not atual:
             return "Horário não encontrado."
+        usados = c.execute("SELECT COUNT(*) FROM alo_alocacaoHorarioSala A JOIN hor_horario H ON H.hor_id = A.idhor_horario WHERE H.hor_horaInicio = ? AND H.hor_horaFim = ?", (atual[0], atual[1])).fetchone()[0]
+        if usados:
+            return "Não é possível editar uma faixa que possui alocações; transfira as aulas antes."
+        outros = [(r[0], r[1]) for r in c.execute("SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE NOT (hor_horaInicio = ? AND hor_horaFim = ?) GROUP BY hor_horaInicio, hor_horaFim", (atual[0], atual[1])).fetchall()]
+        erro = validar_faixa_horario(hora_inicio, hora_fim, outros)
+        if erro:
+            return erro
+        inicio, fim = _hora_minutos(hora_inicio), _hora_minutos(hora_fim)
+        c.execute("UPDATE hor_horario SET hor_horaInicio = ?, hor_horaFim = ? WHERE hor_horaInicio = ? AND hor_horaFim = ?", (inicio // 60 * 100 + inicio % 60, fim // 60 * 100 + fim % 60, atual[0], atual[1]))
+    _mapa_horarios.cache_clear()
     return None
 
 def excluir_horario(hor_id):
     with conexao() as c:
-        em_uso = c.execute(
-            "SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idhor_horario = ?", (hor_id,)
-        ).fetchone()[0]
+        faixa = c.execute("SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?", (hor_id,)).fetchone()
+        if not faixa:
+            return "Horário não encontrado."
+        em_uso = c.execute("SELECT COUNT(*) FROM alo_alocacaoHorarioSala A JOIN hor_horario H ON H.hor_id = A.idhor_horario WHERE H.hor_horaInicio = ? AND H.hor_horaFim = ?", faixa).fetchone()[0]
         
         if em_uso > 0:
-            return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s)."
+            return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s). Remova ou transfira essas aulas antes."
             
-        c.execute("DELETE FROM hor_horario WHERE hor_id = ?", (hor_id,))
+        c.execute("DELETE FROM hor_horario WHERE hor_horaInicio = ? AND hor_horaFim = ?", faixa)
+    _mapa_horarios.cache_clear()
     return None
