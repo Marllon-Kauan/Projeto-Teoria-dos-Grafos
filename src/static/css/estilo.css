@@ -199,6 +199,10 @@ a{color:inherit}
 .formulario{display:grid; gap:0 14px; grid-template-columns:repeat(auto-fit, minmax(180px,1fr))}
 .formulario .largo{grid-column:1 / -1}
 .formulario .btn{justify-self:start}
+form[action*="nova_disciplina"] .btn,
+form[data-original-carga] .btn{align-self:start}
+form[data-original-carga] .acoes-formulario{grid-column:1 / -1; align-items:center}
+form[data-original-carga] .aviso-alocacoes{grid-column:1 / -1; margin:4px 0 14px; padding:10px 12px; border-left:3px solid var(--accent); background:var(--accent-suave); border-radius:6px}
 .ajuda{margin:6px 0 0; font-size:12px; color:var(--muted); line-height:1.4}
 .acoes-formulario{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
 .acoes{display:flex; flex-wrap:wrap; gap:10px; align-items:center; white-space:nowrap}

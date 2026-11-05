@@ -667,8 +667,8 @@ def _disciplina_formulario(origem):
         carga = int(carga_texto)
     except ValueError:
         return valores, None, "A carga horária deve ser um número inteiro maior que zero."
-    if carga <= 0:
-        return valores, None, "A carga horária deve ser maior que zero."
+    if carga < 15 or carga % 15 != 0:
+        return valores, None, "A carga horária deve ser maior ou igual a 15 e múltipla de 15."
     if periodo_texto:
         if not periodo_texto.isdigit() or int(periodo_texto) not in repo.PERIODOS:
             return valores, None, "Selecione um período curricular válido."
@@ -727,18 +727,14 @@ def listar_disciplinas():
 
 @app.route("/disciplinas/nova", methods=["POST"])
 def nova_disciplina():
-    codigo = request.form.get("codigo")
-    nome = request.form.get("nome")
-    periodo_raw = request.form.get("periodo")
-    carga_raw = request.form.get("carga")
-    eletiva = request.form.get("eletiva") == "1"
-    
-    periodo = int(periodo_raw) if periodo_raw and periodo_raw.isdigit() else None
-    carga = int(carga_raw) if carga_raw and carga_raw.isdigit() else 0
-    
-    erro = repo.criar_disciplina(codigo, nome, periodo, carga, eletiva)
+    valores, dados, erro = _disciplina_formulario(request.form)
     if erro:
         flash(erro, "erro")
+        return _render_disciplinas(valores)
+    erro = repo.criar_disciplina(*dados)
+    if erro:
+        flash(erro, "erro")
+        return _render_disciplinas(valores)
     else:
         flash("Disciplina cadastrada com sucesso.", "ok")
         
@@ -754,15 +750,17 @@ def editar_disciplina(dis_id):
 
     if request.method == "POST":
         valores, dados, erro = _disciplina_formulario(request.form)
+        turmas_afetadas = repo.turmas_com_alocacoes_disciplina(dis_id)
         if erro:
             flash(erro, "erro")
-            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores, turmas_afetadas=turmas_afetadas)
 
         #Captura erro e aviso retornados pelo repositório
-        erro, aviso = repo.atualizar_disciplina(dis_id, *dados)
+        confirmar = request.form.get("confirmar_alocacoes") == "1"
+        erro, aviso = repo.atualizar_disciplina(dis_id, *dados, confirmar=confirmar)
         if erro:
             flash(erro, "erro")
-            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores)
+            return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=valores, turmas_afetadas=turmas_afetadas)
 
         mensagem = "Disciplina atualizada com sucesso."
         if aviso:
@@ -770,7 +768,7 @@ def editar_disciplina(dis_id):
         flash(mensagem, "ok")
         return redirect(url_for("listar_disciplinas"))
 
-    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=_valores_disciplina(disciplina))
+    return render_template("editar_disciplina.html", semestre=repo.semestre(), disciplina=disciplina, periodos=repo.PERIODOS, valores=_valores_disciplina(disciplina), turmas_afetadas=repo.turmas_com_alocacoes_disciplina(dis_id))
 
 
 @app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
