@@ -27,6 +27,7 @@ app.secret_key = "chave-de-desenvolvimento-trocar-em-producao"
 repo.garantir_esquema()
 
 
+
 # ---------------------------------------------------------------- helpers
 
 def aulas_do_filtro(tipo, valor):
@@ -648,9 +649,10 @@ def _render_disciplinas(valores=None):
         valores=valores or {},
     )
 
-
+#Valida e normaliza os campos da tela de disciplinas.
 def _disciplina_formulario(origem):
-    """Valida e normaliza os campos da tela de disciplinas."""
+    CODIGO_DISCIPLINA_REGEX = r"^[A-Z]{4}\d{4}$"
+
     codigo = (origem.get("codigo") or "").strip().upper()
     nome = (origem.get("nome") or "").strip()
     periodo_texto = (origem.get("periodo") or "").strip()
@@ -662,6 +664,10 @@ def _disciplina_formulario(origem):
     }
     if not codigo or not nome or not carga_texto:
         return valores, None, "Preencha todos os campos obrigatórios."
+
+    if not re.match(CODIGO_DISCIPLINA_REGEX, codigo):
+        return valores, None, "O código da disciplina deve conter exatamente 4 letras seguidas de 4 números (ex: CCMP0000), sem espaços ou caracteres especiais."
+
     try:
         carga = int(carga_texto)
     except ValueError:

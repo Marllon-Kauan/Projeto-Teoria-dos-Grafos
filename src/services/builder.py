@@ -22,12 +22,14 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_profes
         turma = Turma(
             tur_id=row[0], tur_codigo=row[1], dis_id=row[2],
             dis_codigo=row[3], dis_nome=row[4], idper_periodo=row[5],
-            carga_horaria=row[6], pro_id=row[7], pro_nome=row[8]
+            carga_horaria=row[6], pro_id=row[7], pro_nome=row[8],
+            eletiva=row[9] 
         )
         
         turma.dominio_horarios = set(todos_horarios)
 
-        if turma.idper_periodo in [1, 2, 3, 4]:
+        #Se for eletiva, não sofre bloqueio de período
+        if not turma.eletiva and turma.idper_periodo in [1, 2, 3, 4]:
             if isinstance(horarios_bloqueados, dict):
                 bloqueios_turma = horarios_bloqueados.get(str(turma.idper_periodo), horarios_bloqueados.get(turma.idper_periodo, set()))
             else:
@@ -36,7 +38,6 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_profes
 
         turma.dominio_horarios = turma.dominio_horarios - restricoes_professor.get(turma.pro_id, set())
 
-        # APLICANDO OS NOVOS LIMITES (Seguidas e Diárias)
         limites = limites_professor.get(turma.pro_id, {})
         turma.max_seguidas = limites.get("seguidas")
         turma.max_diarias = limites.get("diarias")
@@ -55,8 +56,9 @@ def construir_grafo(db_path, id_semestre, horarios_bloqueados, restricoes_profes
                 motivos.append("professor")
             if t1.dis_id == t2.dis_id:
                 motivos.append("disciplina")
-            if (t1.idper_periodo not in [None, "NULL", ""]) and (t1.idper_periodo == t2.idper_periodo):
-                motivos.append("periodo")
+            if not t1.eletiva and not t2.eletiva:
+                if (t1.idper_periodo not in [None, "NULL", ""]) and (t1.idper_periodo == t2.idper_periodo):
+                    motivos.append("periodo")
 
             if motivos:
                 grafo.add_aresta(t1.tur_id, t2.tur_id, motivos)

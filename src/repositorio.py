@@ -8,6 +8,7 @@ mudam pouco.
 """
 
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from functools import lru_cache
@@ -41,6 +42,8 @@ PERIODOS_BLOQUEAVEIS = (1, 2, 3, 4)   # mesma regra do builder.py
 STATUS_DISPONIVEL = "Disponível"
 STATUS_INDISPONIVEL = "Indisponível"
 
+#Código das disciplinas
+CODIGO_DISCIPLINA_REGEX = r"^[A-Z]{4}\d{4}$"
 
 # ---------------------------------------------------------------- conexao
 
@@ -270,17 +273,21 @@ def buscar_disciplina(dis_id):
 def criar_disciplina(codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
-    
-    # Validação Carga horária deve ser >= 15 e múltipla de 15
+
+    #Validação do formato do código .
+    if not re.match(CODIGO_DISCIPLINA_REGEX, codigo):
+        return "O código da disciplina deve conter exatamente 4 letras seguidas de 4 números (ex: CCMP0000), sem espaços ou caracteres especiais."
+
+    #Validação da carga horária.
     if not codigo or not nome or carga is None or carga < 15 or carga % 15 != 0:
         return "A carga horária deve ser informada em horas, maior ou igual a 15h e múltipla de 15 (ex: 15, 30, 45, 60)."
     if not eletiva and not periodo:
         return "Disciplinas não eletivas exigem a seleção de um período curricular específico."
-        
+
     with conexao() as c:
         if c.execute("SELECT 1 FROM dis_disciplina WHERE dis_codigo = ?", (codigo,)).fetchone():
             return f"O código '{codigo}' já está em uso por outra disciplina."
-            
+
         novo = (c.execute("SELECT MAX(dis_id) FROM dis_disciplina").fetchone()[0] or 0) + 1
         c.execute(
             "INSERT INTO dis_disciplina (dis_id, dis_codigo, dis_nome, idper_periodo, dis_cargaHoraria, dis_eletiva) "
@@ -293,29 +300,33 @@ def criar_disciplina(codigo, nome, periodo, carga, eletiva):
 def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
     codigo = (codigo or "").strip().upper()
     nome = (nome or "").strip()
-    
-    #Validação da carga horária deve ser >= 15 e múltipla de 15.
+
+    #Validação do formato do código.
+    if not re.match(CODIGO_DISCIPLINA_REGEX, codigo):
+        return "O código da disciplina deve conter exatamente 4 letras seguidas de 4 números (ex: CCMP0000), sem espaços ou caracteres especiais.", None
+
+    #Validação da carga horária.
     if not codigo or not nome or carga is None or carga < 15 or carga % 15 != 0:
         return "A carga horária deve ser informada em horas, maior ou igual a 15h e múltipla de 15 (ex: 15, 30, 45, 60).", None
     if not eletiva and not periodo:
         return "Disciplinas não eletivas exigem a seleção de um período curricular específico.", None
-        
+
     aviso = None
     with conexao() as c:
         atual = c.execute(
             "SELECT dis_codigo, dis_cargaHoraria, idper_periodo FROM dis_disciplina WHERE dis_id = ?",
             (dis_id,)
         ).fetchone()
-        
+
         if not atual:
             return "Disciplina não encontrada.", None
 
         if c.execute("SELECT 1 FROM dis_disciplina WHERE dis_codigo = ? AND dis_id <> ?", (codigo, dis_id)).fetchone():
             return f"O código '{codigo}' já está em uso por outra disciplina.", None
-            
+
         mudou_carga = atual["dis_cargaHoraria"] != carga
         mudou_periodo = atual["idper_periodo"] != periodo
-            
+
         c.execute(
             "UPDATE dis_disciplina SET dis_codigo = ?, dis_nome = ?, idper_periodo = ?, dis_cargaHoraria = ?, dis_eletiva = ? "
             "WHERE dis_id = ?",
@@ -329,14 +340,14 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva):
                     (dis_id, SEMESTRE_ID)
                 ).fetchall()
             ]
-            
+
             if turmas_ids:
                 placeholders = ",".join("?" * len(turmas_ids))
                 alocacoes = c.execute(
                     f"SELECT COUNT(*) FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",
                     turmas_ids
                 ).fetchone()[0]
-                
+
                 if alocacoes > 0:
                     c.execute(
                         f"DELETE FROM alo_alocacaoHorarioSala WHERE idtur_turma IN ({placeholders})",

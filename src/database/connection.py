@@ -15,7 +15,8 @@ SELECT
     DIS.idper_periodo, 
     DIS.dis_cargaHoraria,
     PRO.pro_id, 
-    PRO.pro_nome
+    PRO.pro_nome,
+    DIS.dis_eletiva
 FROM tur_turma TUR
 JOIN dis_disciplina DIS ON DIS.dis_id = TUR.iddis_disciplina
 JOIN pro_professor PRO ON PRO.pro_id = TUR.idpro_professor
@@ -26,7 +27,7 @@ WHERE TUR.idsem_semestre = ?;
 def buscar_turmas(db_path, id_semestre):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute(QUERY_TURMAS_SEMESTRE, (id_semestre,)) #Executa a consulta.
+    cursor.execute(QUERY_TURMAS_SEMESTRE, (id_semestre,))
     rows = cursor.fetchall()
     conn.close()
 
@@ -36,7 +37,7 @@ def buscar_turmas(db_path, id_semestre):
 def buscar_horarios(db_path):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT hor_id FROM hor_horario ORDER BY hor_id;") #Executa a consulta.
+    cursor.execute("SELECT hor_id FROM hor_horario ORDER BY hor_id;")
     rows = cursor.fetchall()
     conn.close()
     
