@@ -76,7 +76,9 @@
         <label for="prof">Professor</label>
         <select name="prof" id="prof" required>
           <option value="" selected disabled>Selecione o professor</option>
-          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+          {% for p in professores %}
+            <option value="{{ p.id }}">{{ p.nome }} ({{ p.email }})</option>
+          {% endfor %}
         </select>
       </div>
       <button class="btn primary" type="submit">Cadastrar turma</button>

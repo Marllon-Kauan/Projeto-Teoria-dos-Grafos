@@ -73,9 +73,11 @@
 
       <div class="campo">
         <label for="prof">Professor</label>
-        <select name="prof" id="prof" required data-atual="{{ valores.prof }}">
+        <select name="prof" id="prof" required data-atual="{{ valores.prof_id }}">
           {% for p in professores %}
-            <option value="{{ p }}" {% if p == valores.prof %}selected{% endif %}>{{ p }}</option>
+            <option value="{{ p.id }}" {% if p.id|string == valores.prof_id|string %}selected{% endif %}>
+              {{ p.nome }} ({{ p.email }})
+            </option>
           {% endfor %}
         </select>
       </div>

@@ -67,8 +67,8 @@
                   {% if filtro_tipo == 'periodo' %}disabled{% endif %}>
             <option value="">Selecione o professor</option>
             {% for prof in professores %}
-              <option value="{{ prof }}" {% if filtro_tipo == 'professor' and filtro_valor == prof %}selected{% endif %}>
-                {{ prof }}
+              <option value="{{ prof.id }}" {% if filtro_tipo == 'professor' and filtro_valor == prof.id|string %}selected{% endif %}>
+                {{ prof.nome }} ({{ prof.email }})
               </option>
             {% endfor %}
           </select>

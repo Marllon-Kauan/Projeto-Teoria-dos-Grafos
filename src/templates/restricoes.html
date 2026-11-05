@@ -53,7 +53,9 @@
       <div class="campo">
         <label for="prof_r">Professor</label>
         <select name="prof" id="prof_r" required>
-          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+          {% for p in professores %}
+            <option value="{{ p.id }}">{{ p.nome }} ({{ p.email }})</option>
+          {% endfor %}
         </select>
       </div>
       <div class="campo">
@@ -109,7 +111,9 @@
       <div class="campo">
         <label for="prof_p">Professor</label>
         <select name="prof" id="prof_p" required>
-          {% for p in professores %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+          {% for p in professores %}
+            <option value="{{ p.id }}">{{ p.nome }} ({{ p.email }})</option>
+          {% endfor %}
         </select>
       </div>
       <div class="campo">

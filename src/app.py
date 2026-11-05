@@ -30,8 +30,8 @@ repo.garantir_esquema()
 
 # ---------------------------------------------------------------- helpers
 
+#Aulas que pertencem ao filtro escolhido (tipo: 'periodo' ou 'professor').
 def aulas_do_filtro(tipo, valor):
-    """Aulas que pertencem ao filtro escolhido (tipo: 'periodo' ou 'professor')."""
     turmas = {t["id"]: t for t in repo.turmas()}
     resultado = []
     for aula in repo.aulas():
@@ -39,8 +39,7 @@ def aulas_do_filtro(tipo, valor):
         if turma is None:
             continue
         if (tipo == "periodo" and turma["periodo"] == int(valor)) or \
-           (tipo == "professor" and turma["prof"] == valor):
-            # a sala pertence a aula (o back escolhe a sala por alocacao)
+           (tipo == "professor" and str(turma["prof_id"]) == str(valor)):
             resultado.append({**aula, "t": {**turma, "sala": aula["sala"]}})
     return resultado
 
@@ -71,12 +70,8 @@ def montar_catalogo(aulas, disciplinas):
     return catalogo
 
 
+#Lê o filtro e aplica: não gerar a grade com periodo e professor preenchidos ao mesmo tempo.
 def ler_filtro(origem):
-    """
-    Le o filtro (querystring ou formulario) e aplica a regra: nao pode gerar a
-    grade com periodo e professor preenchidos ao mesmo tempo.
-    Retorna (tipo, valor, erro).
-    """
     periodo = (origem.get("periodo") or "").strip()
     professor = (origem.get("professor") or "").strip()
 
@@ -87,9 +82,9 @@ def ler_filtro(origem):
             return None, None, "Periodo invalido."
         return "periodo", int(periodo), None
     if professor:
-        if professor not in repo.professores():
+        if not professor.isdigit() or not repo.buscar_professor(int(professor)):
             return None, None, "Professor nao cadastrado."
-        return "professor", professor, None
+        return "professor", int(professor), None
     return None, None, None
 
 
@@ -172,7 +167,6 @@ def validar_movimento(aula, dia_destino, h_destino):
 
 @app.route("/")
 def index():
-    """Tela principal: filtro de pesquisa + grade + informacoes adicionais."""
     tipo, valor, erro = ler_filtro(request.args)
     if erro:
         flash(erro, "erro")
@@ -183,18 +177,19 @@ def index():
     if tipo == "periodo":
         titulo = "%do periodo" % valor
     elif tipo == "professor":
-        titulo = valor
+        prof_obj = repo.buscar_professor(int(valor)) if valor and str(valor).isdigit() else None
+        titulo = prof_obj["nome"] if prof_obj else ""
 
     return render_template(
         "index.html",
         semestre=repo.semestre(),
         periodos=repo.PERIODOS,
-        professores=repo.professores(),
+        professores=repo.professores_detalhados(),
         dias=repo.DIAS,
         horarios=repo.horarios(),
         disciplinas=disciplinas,
         filtro_tipo=tipo,
-        filtro_valor=valor,
+        filtro_valor=str(valor) if valor else "",
         titulo=titulo,
         tabela=montar_tabela(aulas),
         catalogo=montar_catalogo(aulas, disciplinas),
@@ -223,15 +218,15 @@ def gerar():
     return redirect(url_for("index", **({tipo: valor} if tipo else {})))
 
 
+#Tela de cadastro das turmas do semestre.
 @app.route("/turmas")
 def turmas():
-    """Tela de cadastro das turmas do semestre."""
     return render_template(
         "turmas.html",
         semestre=repo.semestre(),
         turmas=repo.turmas(),
         disciplinas=repo.disciplinas(),
-        professores=repo.professores(),
+        professores=repo.professores_detalhados(),
     )
 
 
@@ -242,8 +237,8 @@ def _render_editar_turma(turma, valores):
         turma=turma,
         valores=valores,
         disciplinas=repo.disciplinas(),
-        professores=repo.professores(),
-        salas= [s for s in repo.salas() if s["status"] == repo.STATUS_DISPONIVEL],
+        professores=repo.professores_detalhados(),
+        salas=[s for s in repo.salas() if s["status"] == repo.STATUS_DISPONIVEL],
         tem_alocacoes=bool(repo.salas_da_turma(turma["id"])),
         qtd_aulas=sum(1 for a in repo.aulas() if a["turma"] == turma["id"]),
     )
@@ -259,15 +254,15 @@ def editar_turma(turma_id):
     if request.method == "POST":
         cod = request.form.get("cod")
         codigo = (request.form.get("turma") or "").strip().upper()
-        prof = request.form.get("prof")
+        prof_id = request.form.get("prof")
         sala_raw = (request.form.get("sala") or "").strip()
         
         valores = {
             "cod": cod or "", "turma": codigo,
-            "prof": prof or "", "sala": sala_raw,
+            "prof_id": prof_id or "", "sala": sala_raw,
         }
 
-        if not (cod and len(codigo) == 2 and codigo.isalpha() and prof):
+        if not (cod and len(codigo) == 2 and codigo.isalpha() and prof_id):
             flash("Preencha a disciplina, o professor e um código de exatamente 2 letras para a turma (ex: MA, TG).", "erro")
             return _render_editar_turma(turma, valores)
             
@@ -276,7 +271,7 @@ def editar_turma(turma_id):
             return _render_editar_turma(turma, valores)
 
         erro, aviso = repo.atualizar_turma(
-            turma_id, cod, codigo, prof,
+            turma_id, cod, codigo, prof_id,
             int(sala_raw) if sala_raw else None,
         )
         if erro:
@@ -293,7 +288,7 @@ def editar_turma(turma_id):
     valores = {
         "cod": turma["cod"],
         "turma": turma["turma"],
-        "prof": turma["prof"],
+        "prof_id": str(turma["prof_id"]),
         "sala": str(salas_atuais[0]["id"]) if len(salas_atuais) == 1 else "",
     }
     return _render_editar_turma(turma, valores)
@@ -303,13 +298,13 @@ def editar_turma(turma_id):
 def nova_turma():
     cod = request.form.get("cod")
     codigo = (request.form.get("turma") or "").strip().upper() 
-    prof = request.form.get("prof")
+    prof_id = request.form.get("prof")
 
-    if not (cod and len(codigo) == 2 and codigo.isalpha() and prof):
+    if not (cod and len(codigo) == 2 and codigo.isalpha() and prof_id):
         flash("Preencha a disciplina, o professor e um código de exatamente 2 letras para a turma (ex: MA, TG).", "erro")
         return redirect(url_for("turmas"))
 
-    erro = repo.criar_turma(cod, codigo, prof)
+    erro = repo.criar_turma(cod, codigo, prof_id)
     
     if erro:
         flash(erro, "erro")
@@ -395,9 +390,9 @@ def salas():
     return _render_salas()
 
 
+#Restricoes de horario dos professores + horarios bloqueados.
 @app.route("/restricoes")
 def restricoes():
-    """Restricoes de horario dos professores + horarios bloqueados."""
     periodo_bloqueio = request.args.get("periodo", default=1, type=int)
     if periodo_bloqueio not in repo.PERIODOS_BLOQUEAVEIS:
         periodo_bloqueio = 1
@@ -406,7 +401,7 @@ def restricoes():
         "restricoes.html",
         semestre=repo.semestre(),
         restricoes=repo.restricoes(),
-        professores=repo.professores(),
+        professores=repo.professores_detalhados(),
         dias=repo.DIAS,
         dias_longo=repo.DIAS_LONGO,
         horarios=repo.horarios(),
@@ -420,12 +415,12 @@ def restricoes():
 
 @app.route("/preferencias/nova", methods=["POST"])
 def nova_preferencia():
-    prof = request.form.get("prof")
+    prof_id = request.form.get("prof")
     max_seg = request.form.get("max_seg")
     max_dia = request.form.get("max_dia")
     
-    if prof in repo.professores() and max_seg in ("2", "3") and max_dia in ("2", "4"):
-        repo.salvar_preferencia(prof, int(max_seg), int(max_dia))
+    if prof_id and prof_id.isdigit() and repo.buscar_professor(int(prof_id)) and max_seg in ("2", "3") and max_dia in ("2", "4"):
+        repo.salvar_preferencia(int(prof_id), int(max_seg), int(max_dia))
         flash("Preferência salva. Use \"Gerar grade\" para aplicá-la.", "ok")
     else:
         flash("Escolha o professor e os limites corretamente.", "erro")
@@ -440,23 +435,23 @@ def excluir_preferencia(pro_id):
 
 @app.route("/restricoes/nova", methods=["POST"])
 def nova_restricao():
-    prof = request.form.get("prof")
+    prof_id = request.form.get("prof")
     dia = request.form.get("dia")
     h = request.form.get("h")
     motivo = (request.form.get("motivo") or "").strip()
 
     horarios_validos = [str(i) for i in range(7)] + ["todos"]
 
-    if not (prof in repo.professores() and dia in repo.DIAS and h in horarios_validos):
+    if not (prof_id and prof_id.isdigit() and repo.buscar_professor(int(prof_id)) and dia in repo.DIAS and h in horarios_validos):
         flash("Preencha todos os campos da restrição.", "erro")
         return redirect(url_for("restricoes"))
 
-    status = repo.criar_restricao(prof, dia, h, motivo or "Não informado")
+    status = repo.criar_restricao(int(prof_id), dia, h, motivo or "Não informado")
 
     if status == "atualizado":
         flash("Esta restrição já existia. O motivo foi atualizado com sucesso. Use \"Gerar grade\" para aplicar.", "ok")
     elif status == "criado":
-        flash("Restrição adicionada. Use \"Gerar grade\" para aplicá-la.", "ok")
+        flash("Restrição adicionada. Use \"Gerar grade\" para aplicar.", "ok")
     else:
         flash("Erro ao salvar a restrição. Tente novamente.", "erro")
 
