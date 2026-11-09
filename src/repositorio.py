@@ -72,6 +72,25 @@ def garantir_esquema():
             raise RuntimeError(
                 "Banco sem tabelas em %s. Rode primeiro: python setup_db.py" % DB_PATH)
         
+        #Tabela de Perfis Curriculares
+        if "per_perfil" not in existentes:
+            c.execute("""
+                CREATE TABLE per_perfil (
+                    prf_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    prf_nome TEXT NOT NULL
+                )""")
+
+        #Perfis x Disciplinas.
+        if "pdis_perfil_disciplina" not in existentes:
+            c.execute("""
+                CREATE TABLE pdis_perfil_disciplina (
+                    idprf_perfil INT NOT NULL,
+                    iddis_disciplina INT NOT NULL,
+                    PRIMARY KEY (idprf_perfil, iddis_disciplina),
+                    FOREIGN KEY (idprf_perfil) REFERENCES per_perfil (prf_id) ON DELETE CASCADE,
+                    FOREIGN KEY (iddis_disciplina) REFERENCES dis_disciplina (dis_id) ON DELETE CASCADE
+                )""")
+
         if "sal_sala" in existentes:
             colunas_sala = {r[1] for r in c.execute("PRAGMA table_info(sal_sala)")}
             if "sal_status" not in colunas_sala:
@@ -386,7 +405,8 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva, confirma
 
     return None, aviso
 
-def excluir_disciplina(dis_id):
+#Exclui disciplina e remove automaticamente de todos os perfis associados.
+def excluir_disciplina(dis_id, confirmar=False):
     with conexao() as c:
         turmas_vinculadas = c.execute(
             "SELECT tur_codigo FROM tur_turma WHERE iddis_disciplina = ? AND idsem_semestre = ?",
@@ -395,10 +415,18 @@ def excluir_disciplina(dis_id):
         
         if turmas_vinculadas:
             codigos = ", ".join([r[0] for r in turmas_vinculadas])
-            return f"A exclusão foi impedida pois a disciplina possui turmas vinculadas no semestre ativo ({codigos}). Remova as turmas ou altere a disciplina associada a elas antes de prosseguir."
+            return f"A exclusão foi impedida pois a disciplina possui turmas vinculadas no semestre ativo ({codigos}). Remova as turmas antes de prosseguir.", None
             
+        perfis_afetados = perfis_afetados_por_disciplina(dis_id)
+        if perfis_afetados and not confirmar:
+            nomes = ", ".join(perfis_afetados)
+            return f"CONFIRMACAO_NECESSARIA: Esta disciplina faz parte dos seguintes perfis curriculares: {nomes}. A exclusão irá removê-la automaticamente desses perfis.", perfis_afetados
+
+        c.execute("DELETE FROM pdis_perfil_disciplina WHERE iddis_disciplina = ?", (dis_id,))
         c.execute("DELETE FROM dis_disciplina WHERE dis_id = ?", (dis_id,))
-    return None
+
+    aviso = f"A disciplina foi removida de {len(perfis_afetados)} perfil(is) curricular(es)." if perfis_afetados else None
+    return None, aviso
 
 def turmas():
     with conexao() as c:
@@ -1054,3 +1082,178 @@ def excluir_horario(hor_id):
         aviso = f"Atenção: foram removidos em cascata {' e '.join(detalhes)} associados a esta faixa."
 
     return None, aviso
+
+# Perfis curriculares 
+
+#Retorna a lista de todos os perfis curriculares cadastrados.
+def perfis():
+    with conexao() as c:
+        linhas = c.execute("""
+            SELECT P.prf_id, P.prf_nome, COUNT(PD.iddis_disciplina) AS total_dis
+            FROM per_perfil P
+            LEFT JOIN pdis_perfil_disciplina PD ON PD.idprf_perfil = P.prf_id
+            GROUP BY P.prf_id, P.prf_nome
+            ORDER BY P.prf_nome
+        """).fetchall()
+    return [{"id": r["prf_id"], "nome": r["prf_nome"], "total_disciplinas": r["total_dis"]} for r in linhas]
+
+
+#Retorna os dados básicos do perfil e a lista de IDs de suas disciplinas.
+def buscar_perfil(perfil_id):
+    with conexao() as c:
+        p = c.execute("SELECT prf_id, prf_nome FROM per_perfil WHERE prf_id = ?", (perfil_id,)).fetchone()
+        if not p:
+            return None
+        dis_ids = [
+            r[0] for r in c.execute(
+                "SELECT iddis_disciplina FROM pdis_perfil_disciplina WHERE idprf_perfil = ?",
+                (perfil_id,)
+            ).fetchall()
+        ]
+    return {"id": p["prf_id"], "nome": p["prf_nome"], "disciplinas_ids": dis_ids}
+
+
+#Retorna o perfil organizando suas disciplinas por período curricular e eletivas sem período.
+def detalhar_perfil_por_periodo(perfil_id):
+    prof = buscar_perfil(perfil_id)
+    if not prof:
+        return None
+
+    with conexao() as c:
+        linhas = c.execute("""
+            SELECT D.dis_id, D.dis_codigo, D.dis_nome, D.idper_periodo, D.dis_cargaHoraria, D.dis_eletiva
+            FROM dis_disciplina D
+            JOIN pdis_perfil_disciplina PD ON PD.iddis_disciplina = D.dis_id
+            WHERE PD.idprf_perfil = ?
+            ORDER BY D.idper_periodo IS NULL, D.idper_periodo, D.dis_nome
+        """, (perfil_id,)).fetchall()
+
+    por_periodo = {p: [] for p in PERIODOS}
+    sem_periodo = []
+
+    for r in linhas:
+        item = {
+            "id": r["dis_id"],
+            "cod": r["dis_codigo"],
+            "nome": r["dis_nome"],
+            "periodo": r["idper_periodo"],
+            "carga_horaria": r["dis_cargaHoraria"],
+            "eletiva": bool(r["dis_eletiva"]),
+        }
+        if r["idper_periodo"] in por_periodo:
+            por_periodo[r["idper_periodo"]].append(item)
+        else:
+            sem_periodo.append(item)
+
+    return {
+        "id": prof["id"],
+        "nome": prof["nome"],
+        "periodos": por_periodo,
+        "sem_periodo": sem_periodo,
+        "total": len(linhas)
+    }
+
+
+#Cria um novo perfil curricular.
+def criar_perfil(nome, disciplinas_ids):
+    nome = (nome or "").strip()
+    if not nome:
+        return "O nome do perfil é obrigatório."
+    
+    disciplinas_ids = list(dict.fromkeys([int(x) for x in disciplinas_ids if str(x).isdigit()]))
+    if not disciplinas_ids:
+        return "Selecione pelo menos uma disciplina para o perfil."
+
+    with conexao() as c:
+        novo_id = (c.execute("SELECT MAX(prf_id) FROM per_perfil").fetchone()[0] or 0) + 1
+        c.execute("INSERT INTO per_perfil (prf_id, prf_nome) VALUES (?, ?)", (novo_id, nome))
+        for dis_id in disciplinas_ids:
+            c.execute(
+                "INSERT INTO pdis_perfil_disciplina (idprf_perfil, iddis_disciplina) VALUES (?, ?)",
+                (novo_id, dis_id)
+            )
+    return None
+
+
+#Atualiza o nome e a composição de um perfil.
+def atualizar_perfil(perfil_id, nome, disciplinas_ids):
+    nome = (nome or "").strip()
+    if not nome:
+        return "O nome do perfil é obrigatório."
+
+    disciplinas_ids = list(dict.fromkeys([int(x) for x in disciplinas_ids if str(x).isdigit()]))
+    if not disciplinas_ids:
+        return "Selecione pelo menos uma disciplina para o perfil."
+
+    with conexao() as c:
+        if not c.execute("SELECT 1 FROM per_perfil WHERE prf_id = ?", (perfil_id,)).fetchone():
+            return "Perfil não encontrado."
+
+        c.execute("UPDATE per_perfil SET prf_nome = ? WHERE prf_id = ?", (nome, perfil_id))
+        c.execute("DELETE FROM pdis_perfil_disciplina WHERE idprf_perfil = ?", (perfil_id,))
+        for dis_id in disciplinas_ids:
+            c.execute(
+                "INSERT INTO pdis_perfil_disciplina (idprf_perfil, iddis_disciplina) VALUES (?, ?)",
+                (perfil_id, dis_id)
+            )
+    return None
+
+
+#Exclui um perfil cadastrado sem alterar turmas ou alocações existentes.
+def excluir_perfil(perfil_id):
+    with conexao() as c:
+        if not c.execute("SELECT 1 FROM per_perfil WHERE prf_id = ?", (perfil_id,)).fetchone():
+            return "Perfil não encontrado."
+        c.execute("DELETE FROM pdis_perfil_disciplina WHERE idprf_perfil = ?", (perfil_id,))
+        c.execute("DELETE FROM per_perfil WHERE prf_id = ?", (perfil_id,))
+    return None
+
+
+#Retorna os perfis que contêm a disciplina especificada.
+def perfis_afetados_por_disciplina(dis_id):
+    with conexao() as c:
+        linhas = c.execute("""
+            SELECT P.prf_nome FROM per_perfil P
+            JOIN pdis_perfil_disciplina PD ON PD.idprf_perfil = P.prf_id
+            WHERE PD.iddis_disciplina = ?
+            ORDER BY P.prf_nome
+        """, (dis_id,)).fetchall()
+    return [r[0] for r in linhas]
+
+#Valida a configuração de turmas originada de um perfil curricular e substitui todas as turmas cadastradas no semestre ativo.
+def aplicar_perfil_turmas(turmas_config, confirmar=False):
+    if not turmas_config:
+        return "Nenhuma turma foi informada para configuração."
+
+    codigos_usados = set()
+    for t in turmas_config:
+        codigo = (t.get("codigo") or "").strip().upper()
+        if len(codigo) != 2 or not codigo.isalpha():
+            return f"O código de turma '{codigo}' é inválido. Todos os códigos devem ter exatamente 2 letras."
+        if codigo in codigos_usados:
+            return f"O código de turma '{codigo}' foi preenchido mais de uma vez. Os códigos de turma devem ser únicos no semestre."
+        codigos_usados.add(codigo)
+
+        try:
+            prof_id = int(t.get("prof_id"))
+        except (TypeError, ValueError):
+            return "Professor inválido selecionado."
+
+        if not buscar_professor(prof_id):
+            return "Professor selecionado não existe no sistema."
+
+    if not confirmar:
+        return "CONFIRMACAO_NECESSARIA: Todas as turmas cadastradas no semestre ativo serão substituídas pela nova configuração."
+
+    with conexao() as c:
+        c.execute("DELETE FROM tur_turma WHERE idsem_semestre = ?", (SEMESTRE_ID,))
+        novo_id = (c.execute("SELECT MAX(tur_id) FROM tur_turma").fetchone()[0] or 0) + 1
+        for t in turmas_config:
+            c.execute(
+                "INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (novo_id, t["codigo"].upper(), t["prof_id"], t["dis_id"], SEMESTRE_ID)
+            )
+            novo_id += 1
+
+    return None

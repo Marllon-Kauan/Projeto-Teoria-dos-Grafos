@@ -774,11 +774,25 @@ def editar_disciplina(dis_id):
 
 @app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
 def excluir_disciplina(dis_id):
-    erro = repo.excluir_disciplina(dis_id)
-    if erro:
+    confirmar = request.form.get("confirmar") == "1"
+    erro, aviso = repo.excluir_disciplina(dis_id, confirmar=confirmar)
+
+    if erro and erro.startswith("CONFIRMACAO_NECESSARIA"):
+        flash(erro.replace("CONFIRMACAO_NECESSARIA: ", ""), "erro")
+        return render_template(
+            "confirmar_exclusao_disciplina.html",
+            semestre=repo.semestre(),
+            dis_id=dis_id,
+            perfis_afetados=aviso
+        )
+    elif erro:
         flash(erro, "erro")
     else:
-        flash("Disciplina excluída com sucesso.", "ok")
+        mensagem = "Disciplina excluída com sucesso."
+        if aviso:
+            mensagem += " " + aviso
+        flash(mensagem, "ok")
+
     return redirect(url_for("listar_disciplinas"))
 
 
@@ -884,6 +898,149 @@ def excluir_horario(hor_id):
     return redirect(url_for("listar_horarios"))
 
 
+#Perfis Curriculares 
+
+@app.route("/perfis")
+def listar_perfis():
+    return render_template(
+        "perfis.html",
+        semestre=repo.semestre(),
+        perfis=repo.perfis()
+    )
+
+
+@app.route("/perfis/novo", methods=["GET", "POST"])
+def novo_perfil():
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        disciplinas_ids = request.form.getlist("disciplinas")
+        erro = repo.criar_perfil(nome, disciplinas_ids)
+        if erro:
+            flash(erro, "erro")
+            return render_template(
+                "novo_perfil.html",
+                semestre=repo.semestre(),
+                disciplinas=list(repo.disciplinas().values()),
+                valores={"nome": nome, "disciplinas": disciplinas_ids}
+            )
+        flash("Perfil curricular cadastrado com sucesso.", "ok")
+        return redirect(url_for("listar_perfis"))
+
+    return render_template(
+        "novo_perfil.html",
+        semestre=repo.semestre(),
+        disciplinas=list(repo.disciplinas().values()),
+        valores={}
+    )
+
+
+@app.route("/perfis/<int:perfil_id>")
+def visualizar_perfil(perfil_id):
+    detalhes = repo.detalhar_perfil_por_periodo(perfil_id)
+    if not detalhes:
+        flash("Perfil curricular não encontrado.", "erro")
+        return redirect(url_for("listar_perfis"))
+
+    return render_template(
+        "visualizar_perfil.html",
+        semestre=repo.semestre(),
+        perfil=detalhes,
+        periodos=repo.PERIODOS
+    )
+
+
+@app.route("/perfis/<int:perfil_id>/editar", methods=["GET", "POST"])
+def editar_perfil(perfil_id):
+    prof = repo.buscar_perfil(perfil_id)
+    if not prof:
+        flash("Perfil curricular não encontrado.", "erro")
+        return redirect(url_for("listar_perfis"))
+
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        disciplinas_ids = request.form.getlist("disciplinas")
+        erro = repo.atualizar_perfil(perfil_id, nome, disciplinas_ids)
+        if erro:
+            flash(erro, "erro")
+            return render_template(
+                "editar_perfil.html",
+                semestre=repo.semestre(),
+                perfil=prof,
+                disciplinas=list(repo.disciplinas().values()),
+                valores={"nome": nome, "disciplinas": disciplinas_ids}
+            )
+        flash("Perfil curricular atualizado com sucesso.", "ok")
+        return redirect(url_for("listar_perfis"))
+
+    return render_template(
+        "editar_perfil.html",
+        semestre=repo.semestre(),
+        perfil=prof,
+        disciplinas=list(repo.disciplinas().values()),
+        valores={"nome": prof["nome"], "disciplinas": [str(i) for i in prof["disciplinas_ids"]]}
+    )
+
+
+@app.route("/perfis/<int:perfil_id>/excluir", methods=["POST"])
+def excluir_perfil(perfil_id):
+    erro = repo.excluir_perfil(perfil_id)
+    if erro:
+        flash(erro, "erro")
+    else:
+        flash("Perfil curricular excluído com sucesso. As turmas e grades existentes foram preservadas.", "ok")
+    return redirect(url_for("listar_perfis"))
+
+#Uso do Perfil na Geração
+
+@app.route("/turmas/carregar_perfil", methods=["GET", "POST"])
+def carregar_perfil_turmas():
+    perfis_cadastrados = repo.perfis()
+    perfil_id = request.args.get("perfil_id") or request.form.get("perfil_id")
+
+    detalhes_perfil = None
+    if perfil_id and perfil_id.isdigit():
+        detalhes_perfil = repo.detalhar_perfil_por_periodo(int(perfil_id))
+
+    return render_template(
+        "configurar_perfil_turmas.html",
+        semestre=repo.semestre(),
+        perfis=perfis_cadastrados,
+        perfil_selecionado=detalhes_perfil,
+        professores=repo.professores_detalhados()
+    )
+
+
+@app.route("/turmas/aplicar_perfil", methods=["POST"])
+def aplicar_perfil_turmas():
+    confirmar = request.form.get("confirmar") == "1"
+    
+    dis_ids = request.form.getlist("dis_id")
+    codigos = request.form.getlist("turma_codigo")
+    prof_ids = request.form.getlist("prof_id")
+
+    turmas_config = []
+    for d, c, p in zip(dis_ids, codigos, prof_ids):
+        if d and c and p:
+            turmas_config.append({
+                "dis_id": int(d),
+                "codigo": c.strip().upper(),
+                "prof_id": int(p)
+            })
+
+    erro = repo.aplicar_perfil_turmas(turmas_config, confirmar=confirmar)
+
+    if erro and erro.startswith("CONFIRMACAO_NECESSARIA"):
+        return render_template(
+            "confirmar_substituicao_turmas.html",
+            semestre=repo.semestre(),
+            turmas_config=turmas_config
+        )
+    elif erro:
+        flash(erro, "erro")
+        return redirect(url_for("carregar_perfil_turmas"))
+
+    flash("Configuração de turmas salva. Existem alterações ainda não refletidas na grade exibida; acione 'Gerar grade' para atualizar.", "ok")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
