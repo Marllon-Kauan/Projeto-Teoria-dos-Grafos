@@ -1,0 +1,15 @@
+<div class="seletor-disciplinas">
+  <label for="busca-disciplinas">Buscar disciplina</label>
+  <input id="busca-disciplinas" class="busca-disciplinas" type="search" placeholder="Código ou nome" autocomplete="off">
+  <p class="contador-disciplinas"><strong data-contador-disciplinas>0</strong> disciplinas selecionadas</p>
+  <div class="lista-disciplinas" role="group" aria-label="Disciplinas disponíveis">
+    {% for d in disciplinas %}
+    <label class="item-disciplina" data-disciplina-item data-busca="{{ (d.cod ~ ' ' ~ d.nome)|lower }}">
+      <input type="checkbox" name="disciplinas" value="{{ d.id }}" {% if d.id|string in valores.get('disciplinas',[]) %}checked{% endif %}>
+      <span>{{ d.cod }} — {{ d.nome }}</span>
+    </label>
+    {% endfor %}
+    <p class="nenhuma-disciplina" data-vazio-disciplinas hidden>Nenhuma disciplina corresponde à busca.</p>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/perfil_disciplinas.js') }}"></script>

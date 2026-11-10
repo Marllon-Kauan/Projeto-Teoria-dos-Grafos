@@ -1012,6 +1012,10 @@ def carregar_perfil_turmas():
 
 @app.route("/turmas/aplicar_perfil", methods=["POST"])
 def aplicar_perfil_turmas():
+    flash("A aplicação automática de perfis às turmas está temporariamente bloqueada para preservar grades existentes.", "erro")
+    return redirect(url_for("carregar_perfil_turmas"))
+
+    # Fluxo preservado para futura ativação após proteção das alocações.
     confirmar = request.form.get("confirmar") == "1"
     
     dis_ids = request.form.getlist("dis_id")

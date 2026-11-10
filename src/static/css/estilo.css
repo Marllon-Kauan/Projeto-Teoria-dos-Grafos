@@ -309,6 +309,19 @@ body.editando .celula.livre{
 .vazio{padding:46px 24px; text-align:center; color:var(--muted)}
 .vazio strong{display:block; color:var(--ink); font-size:15px; margin-bottom:4px}
 
+/* Seletor de disciplinas do perfil curricular */
+.seletor-disciplinas{margin-top:8px}
+.seletor-disciplinas > label{display:block; margin-bottom:5px}
+.busca-disciplinas{width:100%; max-width:520px}
+.contador-disciplinas{margin:8px 0; color:var(--muted); font-size:13px}
+.lista-disciplinas{max-height:400px; overflow-y:auto; border:1px solid var(--line); border-radius:6px; padding:6px}
+.item-disciplina{display:flex; align-items:center; gap:8px; margin:0; padding:8px 9px; cursor:pointer; border-radius:4px}
+.item-disciplina:hover{background:var(--bg)}
+.item-disciplina input{flex:0 0 auto; margin:0}
+.item-disciplina[hidden],.nenhuma-disciplina[hidden]{display:none}
+.nenhuma-disciplina{padding:14px 9px; margin:0; color:var(--muted); font-size:13px}
+@media (max-width:760px){.lista-disciplinas{max-height:350px}.item-disciplina{padding:9px 7px}}
+
 /* ---------------- 5) Informacoes adicionais ---------------- */
 .catalogo{min-width:620px}
 .catalogo th{

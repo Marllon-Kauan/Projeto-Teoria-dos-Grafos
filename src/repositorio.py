@@ -1165,6 +1165,10 @@ def criar_perfil(nome, disciplinas_ids):
         return "Selecione pelo menos uma disciplina para o perfil."
 
     with conexao() as c:
+        placeholders = ",".join("?" * len(disciplinas_ids))
+        existentes = {r[0] for r in c.execute(f"SELECT dis_id FROM dis_disciplina WHERE dis_id IN ({placeholders})", disciplinas_ids)}
+        if existentes != set(disciplinas_ids):
+            return "Uma ou mais disciplinas selecionadas não existem."
         novo_id = (c.execute("SELECT MAX(prf_id) FROM per_perfil").fetchone()[0] or 0) + 1
         c.execute("INSERT INTO per_perfil (prf_id, prf_nome) VALUES (?, ?)", (novo_id, nome))
         for dis_id in disciplinas_ids:
@@ -1188,6 +1192,10 @@ def atualizar_perfil(perfil_id, nome, disciplinas_ids):
     with conexao() as c:
         if not c.execute("SELECT 1 FROM per_perfil WHERE prf_id = ?", (perfil_id,)).fetchone():
             return "Perfil não encontrado."
+        placeholders = ",".join("?" * len(disciplinas_ids))
+        existentes = {r[0] for r in c.execute(f"SELECT dis_id FROM dis_disciplina WHERE dis_id IN ({placeholders})", disciplinas_ids)}
+        if existentes != set(disciplinas_ids):
+            return "Uma ou mais disciplinas selecionadas não existem."
 
         c.execute("UPDATE per_perfil SET prf_nome = ? WHERE prf_id = ?", (nome, perfil_id))
         c.execute("DELETE FROM pdis_perfil_disciplina WHERE idprf_perfil = ?", (perfil_id,))
@@ -1222,6 +1230,9 @@ def perfis_afetados_por_disciplina(dis_id):
 
 #Valida a configuração de turmas originada de um perfil curricular e substitui todas as turmas cadastradas no semestre ativo.
 def aplicar_perfil_turmas(turmas_config, confirmar=False):
+    return "A aplicação de perfis às turmas está temporariamente bloqueada para preservar as grades existentes. Configure as turmas manualmente e gere a grade quando estiver pronto."
+
+    # Mantido abaixo para futura ativação após uma migração segura de alocações.
     if not turmas_config:
         return "Nenhuma turma foi informada para configuração."
 
