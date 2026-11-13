@@ -25,9 +25,14 @@ class PerfilCurricularTemplateTests(unittest.TestCase):
         self.assertIn("Sem período específico", view)
 
     def test_profile_navigation_and_safe_application_notice(self):
-        for name in ("index.html", "turmas.html"):
-            self.assertIn("url_for('listar_perfis')", self.read(name))
-        self.assertIn("temporariamente bloqueada", self.read("configurar_perfil_turmas.html"))
+        self.assertIn("carregar_perfil_turmas", self.read("index.html"))
+        config_html = self.read("configurar_perfil_turmas.html")
+        self.assertIn("aplicar_perfil_turmas", config_html)
+        self.assertIn("Salvar configuração de turmas", config_html)
+
+        confirm_html = self.read("confirmar_substituicao_turmas.html")
+        self.assertIn("Confirmar substituição", confirm_html)
+        self.assertIn("permanecerá preservada", confirm_html)
 
     def test_profile_selection_ui_is_shared_and_filterable(self):
         create = self.read("novo_perfil.html")

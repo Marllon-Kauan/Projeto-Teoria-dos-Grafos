@@ -2,21 +2,22 @@
 
 {% block toolbar %}
 <nav class="toolbar">
-  {# "Gerar grade" roda o algoritmo do back e regrava as alocações no banco #}
   <form method="post" action="{{ url_for('gerar') }}" style="display:contents">
     {% if filtro_tipo %}<input type="hidden" name="{{ filtro_tipo }}" value="{{ filtro_valor }}">{% endif %}
     <button class="btn primary" type="submit">Gerar grade</button>
   </form>
 
+  <a class="btn" href="{{ url_for('carregar_perfil_turmas') }}">Utilizar perfil curricular</a>
+
   <span class="sep"></span>
 
-  {% if filtro_tipo %}
+  {% if filtro_tipo and not grade_desatualizada %}
     <a class="btn {% if modo_edicao %}ativo{% endif %}"
        href="{{ url_for('index', **({filtro_tipo: filtro_valor, 'editar': '0' if modo_edicao else '1'})) }}">
       {% if modo_edicao %}Sair da edição{% else %}Editar Turma{% endif %}
     </a>
   {% else %}
-    <span class="btn desabilitado"> Editar Turma</span>
+    <span class="btn desabilitado">Editar Turma</span>
   {% endif %}
 
   <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
@@ -53,7 +54,7 @@
                   {% if filtro_tipo == 'professor' %}disabled{% endif %}>
             <option value="">Selecione o período</option>
             {% for p in periodos %}
-              <option value="{{ p }}" {% if filtro_tipo == 'periodo' and filtro_valor == p %}selected{% endif %}>
+              <option value="{{ p }}" {% if filtro_tipo == 'periodo' and filtro_valor == p|string %}selected{% endif %}>
                 {{ p }}º período
               </option>
             {% endfor %}
@@ -90,6 +91,21 @@
       {% if filtro_tipo %}
         <a class="link" href="{{ url_for('index') }}">Limpar filtro</a>
       {% endif %}
+
+      <hr style="margin: 18px 0; border: 0; border-top: 1px solid #d8dfd8;">
+
+      <form method="get" action="{{ url_for('carregar_perfil_turmas') }}">
+        <div class="campo">
+          <label for="perfil_id">Utilizar perfil curricular</label>
+          <select name="perfil_id" id="perfil_id" required>
+            <option value="">Selecione um perfil</option>
+            {% for p in perfis %}
+              <option value="{{ p.id }}">{{ p.nome }} ({{ p.total_disciplinas }} disc.)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn" type="submit">Configurar turmas do perfil</button>
+      </form>
     </div>
   </aside>
 
@@ -102,6 +118,12 @@
         {% else %}Nenhum filtro aplicado{% endif %}
       </span>
     </div>
+
+    {% if grade_desatualizada %}
+      <p class="aviso erro" style="margin: 12px 16px;">
+        <strong>Configuração alterada:</strong> As turmas do semestre foram substituídas após a última geração. A grade exibida abaixo corresponde à geração anterior. Acione <strong>“Gerar grade”</strong> para gerar e salvar a nova grade.
+      </p>
+    {% endif %}
 
     {% if modo_edicao %}
       <p class="barra-edicao">

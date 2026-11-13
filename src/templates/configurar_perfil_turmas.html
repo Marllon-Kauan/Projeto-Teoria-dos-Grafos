@@ -1,1 +1,171 @@
-{% extends "base.html" %}{% block titulo %}Configurar turmas do perfil{% endblock %}{% block toolbar %}<nav class="toolbar"><a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a><a class="btn" href="{{ url_for('listar_perfis') }}">Perfis curriculares</a></nav>{% endblock %}{% block conteudo %}<div class="pagina"><section class="painel"><div class="painel-head"><h2>Utilizar perfil curricular</h2><span class="sub">A aplicação automática está temporariamente bloqueada para proteger grades existentes.</span></div><form class="painel-body formulario" method="get"><div class="campo"><label for="perfil_id">Perfil</label><select id="perfil_id" name="perfil_id"><option value="">Selecione um perfil</option>{% for p in perfis %}<option value="{{ p.id }}" {% if perfil_selecionado and perfil_selecionado.id==p.id %}selected{% endif %}>{{ p.nome }}</option>{% endfor %}</select></div><button class="btn primary" type="submit">Carregar perfil</button></form></section>{% if perfil_selecionado %}<section class="painel"><div class="painel-head"><h2>Disciplinas do perfil</h2><span class="sub">A configuração automática de turmas está bloqueada nesta versão.</span></div><div class="rolagem"><table class="catalogo"><thead><tr><th>Código</th><th>Nome</th><th>Período</th></tr></thead><tbody>{% for p in perfil_selecionado.periodos.values() %}{% for d in p %}<tr><td>{{ d.cod }}</td><td>{{ d.nome }}</td><td>{{ d.periodo or 'Sem período específico' }}</td></tr>{% endfor %}{% endfor %}{% for d in perfil_selecionado.sem_periodo %}<tr><td>{{ d.cod }}</td><td>{{ d.nome }}</td><td>Sem período específico</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}</div>{% endblock %}
+{% extends "base.html" %}
+{% block titulo %}Configurar Turmas por Perfil{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
+  <span class="sep"></span>
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('listar_perfis') }}">Perfis curriculares</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Utilizar perfil curricular</h2>
+      <span class="sub">Selecione um perfil para configurar as turmas do semestre {{ semestre }}.</span>
+    </div>
+    <form class="painel-body formulario" method="get" action="{{ url_for('carregar_perfil_turmas') }}">
+      <div class="campo">
+        <label for="perfil_id">Perfil curricular <span class="obrigatorio">*</span></label>
+        <select id="perfil_id" name="perfil_id" required onchange="this.form.submit()">
+          <option value="">-- Selecione um perfil --</option>
+          {% for p in perfis %}
+            <option value="{{ p.id }}" {% if perfil_selecionado and perfil_selecionado.id == p.id %}selected{% endif %}>
+              {{ p.nome }} ({{ p.total_disciplinas }} disciplinas)
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn primary" type="submit">Carregar disciplinas</button>
+    </form>
+  </section>
+
+  {% if perfil_selecionado %}
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Configuração das turmas — {{ perfil_selecionado.nome }}</h2>
+      <span class="sub">Configure pelo menos uma turma por disciplina (código de 2 letras único + professor).</span>
+    </div>
+
+    <form method="post" action="{{ url_for('aplicar_perfil_turmas') }}">
+      <input type="hidden" name="perfil_id" value="{{ perfil_selecionado.id }}">
+
+      <div class="rolagem">
+        <table class="catalogo" id="tabela-turmas">
+          <thead>
+            <tr>
+              <th>Período</th>
+              <th>Disciplina</th>
+              <th>Código da turma (2 letras) *</th>
+              <th>Professor *</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set todas_disciplinas = [] %}
+            {% for p in periodos %}
+              {% for d in perfil_selecionado.periodos[p] %}
+                {% set _ = todas_disciplinas.append((p ~ 'º Período', d)) %}
+              {% endfor %}
+            {% endfor %}
+            {% for d in perfil_selecionado.sem_periodo %}
+              {% set _ = todas_disciplinas.append(('Eletiva', d)) %}
+            {% endfor %}
+
+            {% for rotulo_per, d in todas_disciplinas %}
+              {% set linhas_salvas = config_previa.get(d.id) or [{'codigo': '', 'prof_id': ''}] %}
+              {% for item in linhas_salvas %}
+                <tr data-dis-id="{{ d.id }}">
+                  <td>{{ rotulo_per }}</td>
+                  <td>
+                    {% if loop.first %}
+                      <strong>{{ d.cod }}</strong> — {{ d.nome }}
+                    {% else %}
+                      <span class="sub">↳ {{ d.cod }} (turma adicional)</span>
+                    {% endif %}
+                    <input type="hidden" name="dis_id" value="{{ d.id }}">
+                  </td>
+                  <td>
+                    <input type="text" name="turma_codigo" maxlength="2" pattern="[A-Za-z]{2}"
+                           style="text-transform:uppercase; width:80px;" required
+                           value="{{ item.codigo }}" placeholder="Ex: MA">
+                  </td>
+                  <td>
+                    <select name="prof_id" required>
+                      <option value="">-- Selecione o professor --</option>
+                      {% for prof in professores %}
+                        <option value="{{ prof.id }}" {% if item.prof_id == prof.id|string %}selected{% endif %}>
+                          {{ prof.nome }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </td>
+                  <td class="acoes">
+                    {% if loop.first %}
+                      <button type="button" class="btn"
+                              data-dis-id="{{ d.id }}"
+                              data-cod="{{ d.cod }}"
+                              data-periodo="{{ rotulo_per }}"
+                              onclick="adicionarTurma(this)">
+                        + Adicionar turma
+                      </button>
+                    {% else %}
+                      <button type="button" class="link perigo" onclick="this.closest('tr').remove()">
+                        Remover
+                      </button>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+        <div class="painel-body">
+        <button type="submit" class="btn primary">Salvar configuração de turmas</button>
+        <a href="{{ url_for('index') }}" class="btn">Cancelar</a>
+      </div>
+    </form>
+  </section>
+
+  <template id="template-opcoes-prof">
+    <option value="">-- Selecione o professor --</option>
+    {% for prof in professores %}
+      <option value="{{ prof.id }}">{{ prof.nome }}</option>
+    {% endfor %}
+  </template>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if perfil_selecionado %}
+<script>
+function adicionarTurma(botao) {
+  const disId = botao.dataset.disId;
+  const cod = botao.dataset.cod;
+  const rotuloPer = botao.dataset.periodo;
+
+  const tbody = document.querySelector('#tabela-turmas tbody');
+  const linhasDis = Array.from(tbody.querySelectorAll(`tr[data-dis-id="${disId}"]`));
+  const ultima = linhasDis[linhasDis.length - 1];
+  const opcoesProf = document.getElementById('template-opcoes-prof').innerHTML;
+
+  const tr = document.createElement('tr');
+  tr.setAttribute('data-dis-id', disId);
+  tr.innerHTML = `
+    <td>${rotuloPer}</td>
+    <td>
+      <span class="sub">↳ ${cod} (turma adicional)</span>
+      <input type="hidden" name="dis_id" value="${disId}">
+    </td>
+    <td>
+      <input type="text" name="turma_codigo" maxlength="2" pattern="[A-Za-z]{2}"
+             style="text-transform:uppercase; width:80px;" required placeholder="Ex: MB">
+    </td>
+    <td>
+      <select name="prof_id" required>${opcoesProf}</select>
+    </td>
+    <td class="acoes">
+      <button type="button" class="link perigo" onclick="this.closest('tr').remove()">Remover</button>
+    </td>
+  `;
+  ultima.parentNode.insertBefore(tr, ultima.nextSibling);
+}
+</script>
+{% endif %}
+{% endblock %}

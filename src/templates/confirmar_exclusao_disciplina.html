@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titulo %}Confirmar Exclusão de Disciplina{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('listar_disciplinas') }}">Voltar para disciplinas</a>
+  <span class="sep"></span>
+  <a class="btn" href="{{ url_for('index') }}">Grade</a>
+  <a class="btn" href="{{ url_for('listar_perfis') }}">Perfis curriculares</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+{% set ns = namespace(tem_excluido=false) %}
+{% for perfil in perfis_afetados %}
+  {% if perfil is mapping and perfil.sera_excluido %}
+    {% set ns.tem_excluido = true %}
+  {% endif %}
+{% endfor %}
+
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Confirmar exclusão de disciplina</h2>
+      <span class="sub">
+        {% if disciplina %}
+          {{ disciplina.cod }} — {{ disciplina.nome }}
+        {% else %}
+          Disciplina #{{ dis_id }}
+        {% endif %}
+      </span>
+    </div>
+
+    <div class="painel-body">
+      <p class="aviso erro">
+        <strong>Atenção:</strong> A disciplina
+        {% if disciplina %}<strong>{{ disciplina.cod }} — {{ disciplina.nome }}</strong>{% endif %}
+        participa de <strong>{{ perfis_afetados|length }}</strong> perfil(is) curricular(es).
+        Ao confirmar a exclusão, ela será <strong>removida automaticamente</strong> de todos os perfis listados abaixo.
+        {% if ns.tem_excluido %}
+          Como um perfil curricular não pode permanecer sem disciplinas, os perfis em que esta é a única disciplina cadastrada também serão <strong>excluídos automaticamente</strong>.
+        {% endif %}
+        Esta ação <strong>não modificará as grades horárias existentes</strong>.
+      </p>
+
+      <div class="rolagem" style="margin: 16px 0;">
+        <table class="catalogo">
+          <thead>
+            <tr>
+              <th>Perfil curricular afetado</th>
+              <th>Consequência da exclusão</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for perfil in perfis_afetados %}
+              {% set nome_perfil = perfil.nome if perfil is mapping else perfil %}
+              {% set sera_excluido = perfil.sera_excluido if perfil is mapping else false %}
+              <tr>
+                <td><strong>{{ nome_perfil }}</strong></td>
+                <td>
+                  {% if sera_excluido %}
+                    <span style="color: #9e2a2b; font-weight: 600;">
+                      Será excluído automaticamente (esta é a única disciplina do perfil)
+                    </span>
+                  {% else %}
+                    A disciplina será removida do perfil (mantendo {{ perfil.total_disciplinas - 1 }} disciplina(s))
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <form method="post" action="{{ url_for('excluir_disciplina', dis_id=disciplina.id if disciplina else dis_id) }}">
+          <input type="hidden" name="confirmar" value="1">
+          <button type="submit" class="btn primary">Confirmar exclusão</button>
+        </form>
+        <a class="btn" href="{{ url_for('listar_disciplinas') }}">Cancelar</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -71,7 +71,7 @@ def garantir_esquema():
         if "hor_horario" not in existentes:
             raise RuntimeError(
                 "Banco sem tabelas em %s. Rode primeiro: python setup_db.py" % DB_PATH)
-        
+
         #Tabela de Perfis Curriculares
         if "per_perfil" not in existentes:
             c.execute("""
@@ -91,6 +91,51 @@ def garantir_esquema():
                     FOREIGN KEY (iddis_disciplina) REFERENCES dis_disciplina (dis_id) ON DELETE CASCADE
                 )""")
 
+        #Garante que nao existam perfis sem disciplinas cadastradas.
+        c.execute("""
+            DELETE FROM per_perfil
+            WHERE NOT EXISTS (
+                SELECT 1 FROM pdis_perfil_disciplina PD WHERE PD.idprf_perfil = per_perfil.prf_id
+            )
+        """)
+
+        #Garante unicidade do nome do perfil no banco (case-insensitive).
+        try:
+            c.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_per_perfil_nome "
+                "ON per_perfil (prf_nome COLLATE NOCASE)"
+            )
+        except sqlite3.IntegrityError:
+            pass
+
+        #Snapshot da grade anterior para preservacao durante substituicao de turmas.
+        if "grd_snapshot_aula" not in existentes:
+            c.execute("""
+                CREATE TABLE grd_snapshot_aula (
+                    snp_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    idsem_semestre INT NOT NULL,
+                    tur_id_orig INT NOT NULL,
+                    tur_codigo TEXT NOT NULL,
+                    dis_id INT NOT NULL,
+                    dis_codigo TEXT NOT NULL,
+                    dis_nome TEXT NOT NULL,
+                    idper_periodo INT,
+                    dis_eletiva INT NOT NULL DEFAULT 0,
+                    pro_id INT NOT NULL,
+                    pro_nome TEXT NOT NULL,
+                    sal_id INT NOT NULL,
+                    sal_bloco TEXT NOT NULL,
+                    sal_numero INT NOT NULL,
+                    idhor_horario INT NOT NULL
+                )""")
+
+        if "grd_estado_semestre" not in existentes:
+            c.execute("""
+                CREATE TABLE grd_estado_semestre (
+                    idsem_semestre INTEGER PRIMARY KEY,
+                    config_pendente INT NOT NULL DEFAULT 0
+                )""")
+
         if "sal_sala" in existentes:
             colunas_sala = {r[1] for r in c.execute("PRAGMA table_info(sal_sala)")}
             if "sal_status" not in colunas_sala:
@@ -99,7 +144,7 @@ def garantir_esquema():
             if "sal_motivo" not in colunas_sala:
                 c.execute("ALTER TABLE sal_sala ADD COLUMN sal_motivo TEXT")
 
-        # Verificação e migração de colunas na tabela dis_disciplina (DI01/DI04)
+        #Verificação e migração de colunas na tabela dis_disciplina
         if "dis_disciplina" in existentes:
             colunas_dis = {r[1] for r in c.execute("PRAGMA table_info(dis_disciplina)")}
             if "dis_cargaHoraria" not in colunas_dis:
@@ -107,7 +152,7 @@ def garantir_esquema():
             if "dis_eletiva" not in colunas_dis:
                 c.execute("ALTER TABLE dis_disciplina ADD COLUMN dis_eletiva INT NOT NULL DEFAULT 0")
 
-        # Tabela de restrições.
+        #Tabela de restrições.
         if "res_restricao" not in existentes:
             c.execute("""
                 CREATE TABLE res_restricao (
@@ -122,7 +167,7 @@ def garantir_esquema():
             if "idsem_semestre" not in colunas_res:
                 c.execute("ALTER TABLE res_restricao ADD COLUMN idsem_semestre INT NOT NULL DEFAULT 1")
 
-        # Tabela de preferências.
+        #Tabela de preferências.
         if "pre_preferencia" not in existentes:
             c.execute("""
                 CREATE TABLE pre_preferencia (
@@ -151,7 +196,7 @@ def garantir_esquema():
                 """)
                 c.execute("DROP TABLE pre_preferencia_antigo")
 
-        # Tabela de bloqueios.
+        #Tabela de bloqueios.
         if "blq_bloqueio" not in existentes:
             c.execute("""
                 CREATE TABLE blq_bloqueio (
@@ -171,7 +216,7 @@ def garantir_esquema():
                         idsem_semestre INT NOT NULL,
                         PRIMARY KEY (idper_periodo, idhor_horario, idsem_semestre)
                     )""")
-                
+
                 if "idper_periodo" not in colunas_bloqueio:
                     c.execute("""
                         INSERT INTO blq_bloqueio (idper_periodo, idhor_horario, idsem_semestre)
@@ -396,7 +441,29 @@ def atualizar_disciplina(dis_id, codigo, nome, periodo, carga, eletiva, confirma
 
     return None, aviso
 
-#Exclui disciplina e remove automaticamente de todos os perfis associados.
+#Retorna os perfis que contêm a disciplina e indica se ficarão sem disciplinas.
+def _detalhar_perfis_afetados_conn(conn, dis_id):
+    linhas = conn.execute("""
+        SELECT P.prf_id, P.prf_nome,
+               (SELECT COUNT(*) FROM pdis_perfil_disciplina PD2 WHERE PD2.idprf_perfil = P.prf_id) AS total_dis
+        FROM per_perfil P
+        JOIN pdis_perfil_disciplina PD ON PD.idprf_perfil = P.prf_id
+        WHERE PD.iddis_disciplina = ?
+        ORDER BY P.prf_nome
+    """, (dis_id,)).fetchall()
+    return [
+        {
+            "id": r["prf_id"],
+            "nome": r["prf_nome"],
+            "total_disciplinas": r["total_dis"],
+            "sera_excluido": r["total_dis"] <= 1,
+        }
+        for r in linhas
+    ]
+
+
+
+#Exclui disciplina, remove dos perfis associados e exclui perfis que ficarem vazios.
 def excluir_disciplina(dis_id, confirmar=False):
     with conexao() as c:
         turmas_vinculadas = c.execute(
@@ -408,16 +475,39 @@ def excluir_disciplina(dis_id, confirmar=False):
             codigos = ", ".join([r[0] for r in turmas_vinculadas])
             return f"A exclusão foi impedida pois a disciplina possui turmas vinculadas no semestre ativo ({codigos}). Remova as turmas antes de prosseguir.", None
             
-        perfis_afetados = perfis_afetados_por_disciplina(dis_id)
+        perfis_afetados = _detalhar_perfis_afetados_conn(c, dis_id)
         if perfis_afetados and not confirmar:
-            nomes = ", ".join(perfis_afetados)
-            return f"CONFIRMACAO_NECESSARIA: Esta disciplina faz parte dos seguintes perfis curriculares: {nomes}. A exclusão irá removê-la automaticamente desses perfis.", perfis_afetados
+            nomes = ", ".join(p["nome"] for p in perfis_afetados)
+            return (
+                f"CONFIRMACAO_NECESSARIA: Esta disciplina faz parte dos seguintes perfis curriculares: {nomes}. "
+                "A exclusão irá removê-la automaticamente desses perfis.",
+                perfis_afetados,
+            )
 
         c.execute("DELETE FROM pdis_perfil_disciplina WHERE iddis_disciplina = ?", (dis_id,))
         c.execute("DELETE FROM dis_disciplina WHERE dis_id = ?", (dis_id,))
 
-    aviso = f"A disciplina foi removida de {len(perfis_afetados)} perfil(is) curricular(es)." if perfis_afetados else None
-    return None, aviso
+        #Remove automaticamente perfis que ficaram sem nenhuma disciplina.
+        perfis_excluidos = []
+        for p in perfis_afetados:
+            restantes = c.execute(
+                "SELECT COUNT(*) FROM pdis_perfil_disciplina WHERE idprf_perfil = ?",
+                (p["id"],)
+            ).fetchone()[0]
+            if restantes == 0:
+                c.execute("DELETE FROM per_perfil WHERE prf_id = ?", (p["id"],))
+                perfis_excluidos.append(p["nome"])
+
+    if not perfis_afetados:
+        return None, None
+
+    partes_aviso = [f"A disciplina foi removida de {len(perfis_afetados)} perfil(is) curricular(es)."]
+    if perfis_excluidos:
+        nomes_excluidos = ", ".join(perfis_excluidos)
+        partes_aviso.append(
+            f"O(s) perfil(is) {nomes_excluidos} foi(ram) excluído(s) automaticamente por não possuir(em) outras disciplinas."
+        )
+    return None, " ".join(partes_aviso)
 
 def turmas():
     with conexao() as c:
@@ -1155,6 +1245,16 @@ def detalhar_perfil_por_periodo(perfil_id):
         "total": len(linhas)
     }
 
+#Verifica se já existe outro perfil com o mesmo nome.
+def _nome_perfil_em_uso(conn, nome, ignorar_perfil_id=None):
+    alvo = nome.strip().casefold()
+    linhas = conn.execute("SELECT prf_id, prf_nome FROM per_perfil").fetchall()
+    for r in linhas:
+        if ignorar_perfil_id is not None and r["prf_id"] == ignorar_perfil_id:
+            continue
+        if (r["prf_nome"] or "").strip().casefold() == alvo:
+            return True
+    return False
 
 #Cria um novo perfil curricular.
 def criar_perfil(nome, disciplinas_ids):
@@ -1167,12 +1267,20 @@ def criar_perfil(nome, disciplinas_ids):
         return "Selecione pelo menos uma disciplina para o perfil."
 
     with conexao() as c:
+        if _nome_perfil_em_uso(c, nome):
+            return f"Já existe um perfil curricular cadastrado com o nome '{nome}'."
+
         placeholders = ",".join("?" * len(disciplinas_ids))
         existentes = {r[0] for r in c.execute(f"SELECT dis_id FROM dis_disciplina WHERE dis_id IN ({placeholders})", disciplinas_ids)}
         if existentes != set(disciplinas_ids):
             return "Uma ou mais disciplinas selecionadas não existem."
+
         novo_id = (c.execute("SELECT MAX(prf_id) FROM per_perfil").fetchone()[0] or 0) + 1
-        c.execute("INSERT INTO per_perfil (prf_id, prf_nome) VALUES (?, ?)", (novo_id, nome))
+        try:
+            c.execute("INSERT INTO per_perfil (prf_id, prf_nome) VALUES (?, ?)", (novo_id, nome))
+        except sqlite3.IntegrityError:
+            return f"Já existe um perfil curricular cadastrado com o nome '{nome}'."
+
         for dis_id in disciplinas_ids:
             c.execute(
                 "INSERT INTO pdis_perfil_disciplina (idprf_perfil, iddis_disciplina) VALUES (?, ?)",
@@ -1194,12 +1302,20 @@ def atualizar_perfil(perfil_id, nome, disciplinas_ids):
     with conexao() as c:
         if not c.execute("SELECT 1 FROM per_perfil WHERE prf_id = ?", (perfil_id,)).fetchone():
             return "Perfil não encontrado."
+
+        if _nome_perfil_em_uso(c, nome, ignorar_perfil_id=perfil_id):
+            return f"Já existe outro perfil curricular cadastrado com o nome '{nome}'."
+
         placeholders = ",".join("?" * len(disciplinas_ids))
         existentes = {r[0] for r in c.execute(f"SELECT dis_id FROM dis_disciplina WHERE dis_id IN ({placeholders})", disciplinas_ids)}
         if existentes != set(disciplinas_ids):
             return "Uma ou mais disciplinas selecionadas não existem."
 
-        c.execute("UPDATE per_perfil SET prf_nome = ? WHERE prf_id = ?", (nome, perfil_id))
+        try:
+            c.execute("UPDATE per_perfil SET prf_nome = ? WHERE prf_id = ?", (nome, perfil_id))
+        except sqlite3.IntegrityError:
+            return f"Já existe outro perfil curricular cadastrado com o nome '{nome}'."
+
         c.execute("DELETE FROM pdis_perfil_disciplina WHERE idprf_perfil = ?", (perfil_id,))
         for dis_id in disciplinas_ids:
             c.execute(
@@ -1222,51 +1338,180 @@ def excluir_perfil(perfil_id):
 #Retorna os perfis que contêm a disciplina especificada.
 def perfis_afetados_por_disciplina(dis_id):
     with conexao() as c:
+        return [p["nome"] for p in _detalhar_perfis_afetados_conn(c, dis_id)]
+
+
+#Indica se as turmas foram substituidas apos a ultima geração da grade.
+def grade_esta_desatualizada():
+    with conexao() as c:
+        r = c.execute(
+            "SELECT config_pendente FROM grd_estado_semestre WHERE idsem_semestre = ?",
+            (SEMESTRE_ID,)
+        ).fetchone()
+    return bool(r and r["config_pendente"])
+
+#Descarta o snapshot da grade anterior apos uma nova grade ser gerada e salva.
+def concluir_geracao_grade():
+    with conexao() as c:
+        c.execute("DELETE FROM grd_snapshot_aula WHERE idsem_semestre = ?", (SEMESTRE_ID,))
+        c.execute("""
+            INSERT INTO grd_estado_semestre (idsem_semestre, config_pendente)
+            VALUES (?, 0)
+            ON CONFLICT(idsem_semestre) DO UPDATE SET config_pendente = 0
+        """, (SEMESTRE_ID,))
+
+#Retorna as aulas para exibicao/exportacao da grade.
+def aulas_exibicao():
+    atuais = aulas()
+    if atuais or not grade_esta_desatualizada():
+        turmas_map = {t["id"]: t for t in turmas()}
+        resultado = []
+        for aula in atuais:
+            turma = turmas_map.get(aula["turma"])
+            if turma is not None:
+                resultado.append({**aula, "t": {**turma, "sala": aula["sala"]}})
+        return resultado
+
+    with conexao() as c:
         linhas = c.execute("""
-            SELECT P.prf_nome FROM per_perfil P
-            JOIN pdis_perfil_disciplina PD ON PD.idprf_perfil = P.prf_id
-            WHERE PD.iddis_disciplina = ?
-            ORDER BY P.prf_nome
-        """, (dis_id,)).fetchall()
-    return [r[0] for r in linhas]
+            SELECT snp_id, tur_id_orig, tur_codigo,
+                   dis_id, dis_codigo, dis_nome, idper_periodo, dis_eletiva,
+                   pro_id, pro_nome, sal_id, sal_bloco, sal_numero, idhor_horario
+            FROM grd_snapshot_aula
+            WHERE idsem_semestre = ?
+            ORDER BY snp_id
+        """, (SEMESTRE_ID,)).fetchall()
 
-#Valida a configuração de turmas originada de um perfil curricular e substitui todas as turmas cadastradas no semestre ativo.
-def aplicar_perfil_turmas(turmas_config, confirmar=False):
-    return "A aplicação de perfis às turmas está temporariamente bloqueada para preservar as grades existentes. Configure as turmas manualmente e gere a grade quando estiver pronto."
+    resultado = []
+    for r in linhas:
+        pos = dia_h(r["idhor_horario"])
+        if pos is None:
+            continue
+        sala_nome = "%s-%s" % (r["sal_bloco"], r["sal_numero"])
+        turma_snap = {
+            "id": r["tur_id_orig"],
+            "cod": r["dis_codigo"],
+            "nome_dis": r["dis_nome"],
+            "cor": (r["dis_id"] % 4) + 1,
+            "turma": str(r["tur_codigo"]),
+            "prof": r["pro_nome"],
+            "prof_id": r["pro_id"],
+            "dis_id": r["dis_id"],
+            "periodo": r["idper_periodo"],
+            "eletiva": bool(r["dis_eletiva"]),
+            "sala": sala_nome,
+        }
+        resultado.append({
+            "id": r["snp_id"],
+            "turma": r["tur_id_orig"],
+            "dia": pos[0],
+            "h": pos[1],
+            "hor_id": r["idhor_horario"],
+            "sal_id": r["sal_id"],
+            "sala": sala_nome,
+            "t": turma_snap,
+        })
+    return resultado
 
-    # Mantido abaixo para futura ativação após uma migração segura de alocações.
+#Valida a configuração de turmas do perfil selecionado e substitui as turmas do semestre ativo
+def aplicar_perfil_turmas(perfil_id, turmas_config, confirmar=False):
+    perfil = buscar_perfil(perfil_id)
+    if not perfil:
+        return "Perfil curricular não encontrado."
+
     if not turmas_config:
         return "Nenhuma turma foi informada para configuração."
 
+    disciplinas_perfil = set(perfil["disciplinas_ids"])
+    disciplinas_configuradas = set()
     codigos_usados = set()
+
     for t in turmas_config:
+        try:
+            dis_id = int(t.get("dis_id"))
+        except (TypeError, ValueError):
+            return "Disciplina inválida na configuração."
+
+        if dis_id not in disciplinas_perfil:
+            return "Há disciplina na configuração que não pertence ao perfil selecionado."
+        disciplinas_configuradas.add(dis_id)
+
         codigo = (t.get("codigo") or "").strip().upper()
         if len(codigo) != 2 or not codigo.isalpha():
             return f"O código de turma '{codigo}' é inválido. Todos os códigos devem ter exatamente 2 letras."
         if codigo in codigos_usados:
-            return f"O código de turma '{codigo}' foi preenchido mais de uma vez. Os códigos de turma devem ser únicos no semestre."
+            return f"O código de turma '{codigo}' está duplicado. Os códigos das turmas devem ser únicos no semestre."
         codigos_usados.add(codigo)
 
         try:
             prof_id = int(t.get("prof_id"))
         except (TypeError, ValueError):
-            return "Professor inválido selecionado."
+            return "Selecione um professor válido para todas as turmas."
 
         if not buscar_professor(prof_id):
             return "Professor selecionado não existe no sistema."
 
+    if disciplinas_configuradas != disciplinas_perfil:
+        return "Todas as disciplinas do perfil devem possuir pelo menos uma turma configurada."
+
     if not confirmar:
-        return "CONFIRMACAO_NECESSARIA: Todas as turmas cadastradas no semestre ativo serão substituídas pela nova configuração."
+        return "CONFIRMACAO_NECESSARIA"
 
     with conexao() as c:
+        #Preserva as alocações da grade atualmente ativa antes de apagar as turmas antigas.
+        alocacoes_atuais = c.execute("""
+            SELECT TUR.tur_id, TUR.tur_codigo,
+                   DIS.dis_id, DIS.dis_codigo, DIS.dis_nome, DIS.idper_periodo, DIS.dis_eletiva,
+                   PRO.pro_id, PRO.pro_nome,
+                   SAL.sal_id, SAL.sal_bloco, SAL.sal_numero,
+                   ALO.idhor_horario
+            FROM alo_alocacaoHorarioSala ALO
+            JOIN tur_turma TUR ON TUR.tur_id = ALO.idtur_turma
+            JOIN dis_disciplina DIS ON DIS.dis_id = TUR.iddis_disciplina
+            JOIN pro_professor PRO ON PRO.pro_id = TUR.idpro_professor
+            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            WHERE TUR.idsem_semestre = ?
+            ORDER BY ALO.alo_id
+        """, (SEMESTRE_ID,)).fetchall()
+
+        if alocacoes_atuais:
+            c.execute("DELETE FROM grd_snapshot_aula WHERE idsem_semestre = ?", (SEMESTRE_ID,))
+            c.executemany("""
+                INSERT INTO grd_snapshot_aula (
+                    idsem_semestre, tur_id_orig, tur_codigo,
+                    dis_id, dis_codigo, dis_nome, idper_periodo, dis_eletiva,
+                    pro_id, pro_nome, sal_id, sal_bloco, sal_numero, idhor_horario
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [
+                (
+                    SEMESTRE_ID, r["tur_id"], r["tur_codigo"],
+                    r["dis_id"], r["dis_codigo"], r["dis_nome"], r["idper_periodo"], r["dis_eletiva"],
+                    r["pro_id"], r["pro_nome"], r["sal_id"], r["sal_bloco"], r["sal_numero"], r["idhor_horario"]
+                )
+                for r in alocacoes_atuais
+            ])
+
+        #Remove alocações antigas e substitui as turmas do semestre ativo sem deixar registros sozinhos.
+        c.execute("""
+            DELETE FROM alo_alocacaoHorarioSala
+            WHERE idtur_turma IN (SELECT tur_id FROM tur_turma WHERE idsem_semestre = ?)
+        """, (SEMESTRE_ID,))
         c.execute("DELETE FROM tur_turma WHERE idsem_semestre = ?", (SEMESTRE_ID,))
+
         novo_id = (c.execute("SELECT MAX(tur_id) FROM tur_turma").fetchone()[0] or 0) + 1
         for t in turmas_config:
             c.execute(
                 "INSERT INTO tur_turma (tur_id, tur_codigo, idpro_professor, iddis_disciplina, idsem_semestre) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (novo_id, t["codigo"].upper(), t["prof_id"], t["dis_id"], SEMESTRE_ID)
+                (novo_id, t["codigo"].strip().upper(), int(t["prof_id"]), int(t["dis_id"]), SEMESTRE_ID)
             )
             novo_id += 1
+
+        #Marca que a configuração foi alterada e aguarda nova geracao de grade.
+        c.execute("""
+            INSERT INTO grd_estado_semestre (idsem_semestre, config_pendente)
+            VALUES (?, 1)
+            ON CONFLICT(idsem_semestre) DO UPDATE SET config_pendente = 1
+        """, (SEMESTRE_ID,))
 
     return None

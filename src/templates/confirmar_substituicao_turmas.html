@@ -1,1 +1,72 @@
-{% extends "base.html" %}{% block titulo %}Aplicação bloqueada{% endblock %}{% block toolbar %}<nav class="toolbar"><a class="btn" href="{{ url_for('carregar_perfil_turmas') }}">Voltar</a></nav>{% endblock %}{% block conteudo %}<div class="pagina"><section class="painel"><div class="painel-head"><h2>Aplicação não realizada</h2><span class="sub">A substituição automática está bloqueada para preservar turmas e grades existentes.</span></div><div class="painel-body"><p>Não foram alterados dados do semestre ativo. Configure as turmas manualmente e gere a grade quando necessário.</p><a class="btn" href="{{ url_for('carregar_perfil_turmas') }}">Cancelar</a></div></section></div>{% endblock %}
+{% extends "base.html" %}
+{% block titulo %}Confirmar Substituição de Turmas{% endblock %}
+
+{% block toolbar %}
+<nav class="toolbar">
+  <a class="btn" href="{{ url_for('index') }}">Voltar para a grade</a>
+</nav>
+{% endblock %}
+
+{% block conteudo %}
+<div class="pagina">
+  <section class="painel">
+    <div class="painel-head">
+      <h2>Confirmar substituição das turmas — {{ perfil.nome }}</h2>
+      <span class="sub">Semestre {{ semestre }}</span>
+    </div>
+
+    <div class="painel-body">
+      <p class="aviso erro">
+        <strong>Atenção:</strong> Ao confirmar, todas as turmas anteriormente configuradas no semestre {{ semestre }} serão substituídas pelas {{ turmas_config|length }} turma(s) listada(s) abaixo.
+        A grade horária já gerada permanecerá preservada até que você acione <strong>“Gerar grade”</strong>.
+      </p>
+
+      <div class="rolagem" style="margin: 16px 0;">
+        <table class="catalogo">
+          <thead>
+            <tr>
+              <th>Disciplina</th>
+              <th>Código da turma</th>
+              <th>Professor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in turmas_config %}
+              <tr>
+                <td><strong>{{ t.dis_cod }}</strong> — {{ t.dis_nome }}</td>
+                <td>{{ t.codigo }}</td>
+                <td>{{ t.prof_nome }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <form method="post" action="{{ url_for('aplicar_perfil_turmas') }}">
+          <input type="hidden" name="perfil_id" value="{{ perfil.id }}">
+          <input type="hidden" name="confirmar" value="1">
+          {% for t in turmas_config %}
+            <input type="hidden" name="dis_id" value="{{ t.dis_id }}">
+            <input type="hidden" name="turma_codigo" value="{{ t.codigo }}">
+            <input type="hidden" name="prof_id" value="{{ t.prof_id }}">
+          {% endfor %}
+          <button type="submit" class="btn primary">Confirmar substituição</button>
+        </form>
+
+        <form method="post" action="{{ url_for('carregar_perfil_turmas') }}">
+          <input type="hidden" name="perfil_id" value="{{ perfil.id }}">
+          {% for t in turmas_config %}
+            <input type="hidden" name="dis_id" value="{{ t.dis_id }}">
+            <input type="hidden" name="turma_codigo" value="{{ t.codigo }}">
+            <input type="hidden" name="prof_id" value="{{ t.prof_id }}">
+          {% endfor %}
+          <button type="submit" class="btn">Voltar e editar</button>
+        </form>
+
+        <a href="{{ url_for('index') }}" class="btn">Cancelar</a>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

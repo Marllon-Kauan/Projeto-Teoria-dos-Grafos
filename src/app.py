@@ -32,15 +32,12 @@ repo.garantir_esquema()
 
 #Aulas que pertencem ao filtro escolhido (tipo: 'periodo' ou 'professor').
 def aulas_do_filtro(tipo, valor):
-    turmas = {t["id"]: t for t in repo.turmas()}
     resultado = []
-    for aula in repo.aulas():
-        turma = turmas.get(aula["turma"])
-        if turma is None:
-            continue
+    for aula in repo.aulas_exibicao():
+        turma = aula["t"]
         if (tipo == "periodo" and turma["periodo"] == int(valor)) or \
            (tipo == "professor" and str(turma["prof_id"]) == str(valor)):
-            resultado.append({**aula, "t": {**turma, "sala": aula["sala"]}})
+            resultado.append(aula)
     return resultado
 
 
@@ -48,24 +45,24 @@ def montar_tabela(aulas):
     """{(dia, horario): aula} usado pelo template para preencher a grade."""
     return {(a["dia"], a["h"]): a for a in aulas}
 
-
+#Catalogo de disciplinas do bloco 'Informacoes adicionais'.
 def montar_catalogo(aulas, disciplinas):
-    """Catalogo de disciplinas do bloco 'Informacoes adicionais'."""
     catalogo, vistos = [], set()
     for aula in aulas:
         turma = aula["t"]
         if turma["id"] in vistos:
             continue
         vistos.add(turma["id"])
+        info_dis = disciplinas.get(turma["cod"], {})
         catalogo.append({
             "cod": turma["cod"],
-            "nome": disciplinas[turma["cod"]]["nome"],
-            "cor": disciplinas[turma["cod"]]["cor"],
+            "nome": info_dis.get("nome") or turma.get("nome_dis", turma["cod"]),
+            "cor": info_dis.get("cor") or turma.get("cor", 1),
             "turma": turma["turma"],
             "prof": turma["prof"],
             "periodo": turma["periodo"],
             "sala": turma["sala"],
-            "qtd": sum(1 for a in aulas if a["turma"] == turma["id"]),
+            "qtd": sum(1 for a in aulas if a["t"]["id"] == turma["id"]),
         })
     return catalogo
 
@@ -174,6 +171,18 @@ def index():
 
     disciplinas = repo.disciplinas()
     aulas = aulas_do_filtro(tipo, valor) if tipo else []
+    for a in aulas:
+        t = a["t"]
+        if t["cod"] not in disciplinas:
+            disciplinas[t["cod"]] = {
+                "id": t["dis_id"],
+                "cod": t["cod"],
+                "nome": t.get("nome_dis", t["cod"]),
+                "periodo": t["periodo"],
+                "cor": t.get("cor", 1),
+            }
+
+    grade_desatualizada = repo.grade_esta_desatualizada()
     titulo = ""
     if tipo == "periodo":
         titulo = "%do periodo" % valor
@@ -186,6 +195,7 @@ def index():
         semestre=repo.semestre(),
         periodos=repo.PERIODOS,
         professores=repo.professores_detalhados(),
+        perfis=repo.perfis(),
         dias=repo.DIAS,
         horarios=repo.horarios(),
         disciplinas=disciplinas,
@@ -195,7 +205,8 @@ def index():
         tabela=montar_tabela(aulas),
         catalogo=montar_catalogo(aulas, disciplinas),
         total_aulas=len(aulas),
-        modo_edicao=request.args.get("editar") == "1",
+        modo_edicao=(request.args.get("editar") == "1" and not grade_desatualizada),
+        grade_desatualizada=grade_desatualizada,
     )
 
 
@@ -204,6 +215,10 @@ def gerar():
     """Roda o algoritmo do back com os bloqueios e restricoes cadastrados."""
     tipo, valor, _ = ler_filtro(request.form)
 
+    if not repo.turmas():
+        flash("Não há turmas cadastradas no semestre ativo para gerar a grade.", "erro")
+        return redirect(url_for("index", **({tipo: valor} if tipo else {})))
+
     resultado = gerar_grade(
         repo.DB_PATH, repo.SEMESTRE_ID, repo.bloqueados_por_periodo(), repo.restricoes_por_professor(),
         repo.limites_por_professor(), repo.ids_do_algoritmo())
@@ -211,8 +226,10 @@ def gerar():
     if resultado.get("sem_horarios"):
         flash("Não é possível gerar a grade: é necessário cadastrar pelo menos um horário.", "erro")
     elif resultado["ok"]:
+        repo.concluir_geracao_grade()
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
     elif resultado.get("parcial"):
+        repo.concluir_geracao_grade()
         flash("Grade gerada parcialmente. Não foi possível alocar: " + "; ".join(resultado["turmas"]), "erro")
     else:
         flash("Erro ao gerar a grade.", "erro")
@@ -483,12 +500,12 @@ def salvar_bloqueios():
 
 # ---------------------------------------------------------------- edicao
 
+#Move uma aula para outro dia/horario.
 @app.route("/editar/mover", methods=["POST"])
 def mover_aula():
-    """
-    Move uma aula para outro dia/horario.
-    So aplica a alteracao se passar na verificacao das restricoes.
-    """
+    if repo.grade_esta_desatualizada():
+        return jsonify(ok=False, mensagem="A grade exibida corresponde à geração anterior. Clique em 'Gerar grade' antes de editar."), 400
+    
     corpo = request.get_json(silent=True) or {}
     aula_id = corpo.get("aula_id")
     dia = corpo.get("dia")
@@ -513,8 +530,9 @@ def mover_aula():
 
 def _texto_celula(aula, disciplinas):
     t = aula["t"]
+    nome_dis = disciplinas.get(t["cod"], {}).get("nome") or t.get("nome_dis", t["cod"])
     return "%s %s - %s - Sala %s - %s" % (
-        t["cod"], t["turma"], disciplinas[t["cod"]]["nome"], t["sala"], t["prof"])
+        t["cod"], t["turma"], nome_dis, t["sala"], t["prof"])
 
 
 @app.route("/exportar/csv")
@@ -549,9 +567,9 @@ def exportar_csv():
     )
 
 
+#Exporta em PDF a grade que esta sendo visualizada (usa reportlab).
 @app.route("/exportar/pdf")
 def exportar_pdf():
-    """Exporta em PDF a grade que esta sendo visualizada (usa reportlab)."""
     tipo, valor, erro = ler_filtro(request.args)
     if erro or not tipo:
         flash(erro or "Gere uma grade antes de exportar.", "erro")
@@ -592,8 +610,9 @@ def exportar_pdf():
             aula = tabela.get((dia, i))
             if aula:
                 t = aula["t"]
+                nome_dis = disciplinas.get(t["cod"], {}).get("nome") or t.get("nome_dis", t["cod"])
                 linha.append(Paragraph("<b>%s %s</b><br/>%s<br/>Sala %s - %s" % (
-                    t["cod"], t["turma"], disciplinas[t["cod"]]["nome"],
+                    t["cod"], t["turma"], nome_dis,
                     t["sala"], t["prof"]), celula))
             else:
                 linha.append("")
@@ -775,16 +794,21 @@ def editar_disciplina(dis_id):
 
 @app.route("/disciplinas/<int:dis_id>/excluir", methods=["POST"])
 def excluir_disciplina(dis_id):
+    disciplina = repo.buscar_disciplina(dis_id)
+    if not disciplina:
+        flash("Disciplina não encontrada.", "erro")
+        return redirect(url_for("listar_disciplinas"))
+
     confirmar = request.form.get("confirmar") == "1"
     erro, aviso = repo.excluir_disciplina(dis_id, confirmar=confirmar)
 
     if erro and erro.startswith("CONFIRMACAO_NECESSARIA"):
-        flash(erro.replace("CONFIRMACAO_NECESSARIA: ", ""), "erro")
         return render_template(
             "confirmar_exclusao_disciplina.html",
             semestre=repo.semestre(),
+            disciplina=disciplina,
             dis_id=dis_id,
-            perfis_afetados=aviso
+            perfis_afetados=aviso,
         )
     elif erro:
         flash(erro, "erro")
@@ -977,56 +1001,105 @@ def excluir_perfil(perfil_id):
 
 #Uso do Perfil na Geração
 
+def _agrupar_config_por_disciplina(turmas_config):
+    agrupado = {}
+    for t in turmas_config:
+        agrupado.setdefault(int(t["dis_id"]), []).append({
+            "codigo": (t.get("codigo") or "").strip().upper(),
+            "prof_id": str(t.get("prof_id") or ""),
+        })
+    return agrupado
+
 @app.route("/turmas/carregar_perfil", methods=["GET", "POST"])
 def carregar_perfil_turmas():
     perfis_cadastrados = repo.perfis()
     perfil_id = request.args.get("perfil_id") or request.form.get("perfil_id")
 
     detalhes_perfil = None
-    if perfil_id and perfil_id.isdigit():
+    if perfil_id and str(perfil_id).isdigit():
         detalhes_perfil = repo.detalhar_perfil_por_periodo(int(perfil_id))
+
+    config_previa = {}
+    if request.method == "POST":
+        dis_ids = request.form.getlist("dis_id")
+        codigos = request.form.getlist("turma_codigo")
+        prof_ids = request.form.getlist("prof_id")
+        for d, c, p in zip(dis_ids, codigos, prof_ids):
+            if str(d).isdigit():
+                config_previa.setdefault(int(d), []).append({
+                    "codigo": (c or "").strip().upper(),
+                    "prof_id": str(p or ""),
+                })
 
     return render_template(
         "configurar_perfil_turmas.html",
         semestre=repo.semestre(),
         perfis=perfis_cadastrados,
         perfil_selecionado=detalhes_perfil,
-        professores=repo.professores_detalhados()
+        periodos=repo.PERIODOS,
+        professores=repo.professores_detalhados(),
+        config_previa=config_previa,
     )
 
 
 @app.route("/turmas/aplicar_perfil", methods=["POST"])
 def aplicar_perfil_turmas():
-    flash("A aplicação automática de perfis às turmas está temporariamente bloqueada para preservar grades existentes.", "erro")
-    return redirect(url_for("carregar_perfil_turmas"))
+    perfil_id_raw = (request.form.get("perfil_id") or "").strip()
+    if not perfil_id_raw.isdigit():
+        flash("Selecione um perfil curricular válido.", "erro")
+        return redirect(url_for("carregar_perfil_turmas"))
 
-    # Fluxo preservado para futura ativação após proteção das alocações.
+    perfil_id = int(perfil_id_raw)
     confirmar = request.form.get("confirmar") == "1"
-    
+
     dis_ids = request.form.getlist("dis_id")
     codigos = request.form.getlist("turma_codigo")
     prof_ids = request.form.getlist("prof_id")
 
     turmas_config = []
     for d, c, p in zip(dis_ids, codigos, prof_ids):
-        if d and c and p:
+        if str(d).isdigit():
             turmas_config.append({
                 "dis_id": int(d),
-                "codigo": c.strip().upper(),
-                "prof_id": int(p)
+                "codigo": (c or "").strip().upper(),
+                "prof_id": p,
             })
 
-    erro = repo.aplicar_perfil_turmas(turmas_config, confirmar=confirmar)
+    erro = repo.aplicar_perfil_turmas(perfil_id, turmas_config, confirmar=confirmar)
 
-    if erro and erro.startswith("CONFIRMACAO_NECESSARIA"):
+    if erro == "CONFIRMACAO_NECESSARIA":
+        perfil_obj = repo.buscar_perfil(perfil_id)
+        profs_map = {str(p["id"]): p["nome"] for p in repo.professores_detalhados()}
+        dis_map = {d["id"]: d for d in repo.disciplinas().values()}
+        resumo_turmas = []
+        for t in turmas_config:
+            d_info = dis_map.get(t["dis_id"], {})
+            resumo_turmas.append({
+                "dis_id": t["dis_id"],
+                "dis_cod": d_info.get("cod", ""),
+                "dis_nome": d_info.get("nome", ""),
+                "codigo": t["codigo"],
+                "prof_id": t["prof_id"],
+                "prof_nome": profs_map.get(str(t["prof_id"]), ""),
+            })
         return render_template(
             "confirmar_substituicao_turmas.html",
             semestre=repo.semestre(),
-            turmas_config=turmas_config
+            perfil=perfil_obj,
+            turmas_config=resumo_turmas,
         )
-    elif erro:
+
+    if erro:
         flash(erro, "erro")
-        return redirect(url_for("carregar_perfil_turmas"))
+        return render_template(
+            "configurar_perfil_turmas.html",
+            semestre=repo.semestre(),
+            perfis=repo.perfis(),
+            perfil_selecionado=repo.detalhar_perfil_por_periodo(perfil_id),
+            periodos=repo.PERIODOS,
+            professores=repo.professores_detalhados(),
+            config_previa=_agrupar_config_por_disciplina(turmas_config),
+        )
 
     flash("Configuração de turmas salva. Existem alterações ainda não refletidas na grade exibida; acione 'Gerar grade' para atualizar.", "ok")
     return redirect(url_for("index"))
