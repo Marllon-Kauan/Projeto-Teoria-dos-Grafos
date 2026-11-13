@@ -154,7 +154,8 @@ def validar_movimento(aula, dia_destino, h_destino):
             continue
         if t2["prof_id"] == turma["prof_id"]:
             return "%s já tem aula em %s." % (turma["prof"], onde)
-        if turma["periodo"] is not None and t2["periodo"] == turma["periodo"]:
+        if (not turma.get("eletiva") and not t2.get("eletiva")
+                and turma["periodo"] is not None and t2["periodo"] == turma["periodo"]):
             return "O %do período já tem aula em %s." % (turma["periodo"], onde)
         if t2["dis_id"] == turma["dis_id"]:
             return "Outra turma da mesma disciplina já tem aula em %s." % onde

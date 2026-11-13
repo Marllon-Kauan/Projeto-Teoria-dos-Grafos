@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Confere se a grade que esta no banco respeita as regras.
 
@@ -27,9 +26,13 @@ def tabela_existe(cur, nome):
 def main(max_seguidas):
     cur = sqlite3.connect(DB_PATH).cursor()
 
-    cur.execute("""
+    colunas_dis = {r[1] for r in cur.execute("PRAGMA table_info(dis_disciplina)")}
+    campo_eletiva = "COALESCE(DIS.dis_eletiva, 0)" if "dis_eletiva" in colunas_dis else "0"
+
+    cur.execute(f"""
         SELECT ALO.alo_id, TUR.tur_id, TUR.tur_codigo, TUR.idpro_professor, PRO.pro_nome,
                DIS.dis_id, DIS.dis_nome, DIS.idper_periodo, DIS.dis_cargaHoraria,
+               {campo_eletiva},
                ALO.idsal_sala, ALO.idhor_horario, HOR.hor_diaSemana, HOR.hor_slot
         FROM alo_alocacaoHorarioSala ALO
         JOIN tur_turma TUR ON TUR.tur_id = ALO.idtur_turma
@@ -39,7 +42,7 @@ def main(max_seguidas):
         WHERE TUR.idsem_semestre = ?""", (SEMESTRE,))
     aulas = [dict(zip(
         ["alo", "tur", "codigo", "pro", "pro_nome", "dis", "dis_nome", "per", "carga",
-         "sala", "hor", "dia", "slot"], r)) for r in cur.fetchall()]
+         "eletiva", "sala", "hor", "dia", "slot"], r)) for r in cur.fetchall()]
 
     if not aulas:
         print("Nao ha aulas no banco. Gere a grade primeiro.")
@@ -62,7 +65,8 @@ def main(max_seguidas):
                 if x["pro"] == y["pro"]:
                     erros.append("[professor] %s da aula em %s e em %s no mesmo horario (%s)"
                                  % (x["pro_nome"], rotulo(x), rotulo(y), quando))
-                if x["per"] is not None and x["per"] == y["per"]:
+                if (not x["eletiva"] and not y["eletiva"]
+                        and x["per"] is not None and x["per"] == y["per"]):
                     erros.append("[periodo] %do periodo tem %s e %s ao mesmo tempo (%s)"
                                  % (x["per"], rotulo(x), rotulo(y), quando))
                 if x["dis"] == y["dis"]:

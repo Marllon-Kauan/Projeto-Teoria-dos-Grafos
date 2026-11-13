@@ -432,7 +432,7 @@ def turmas():
     with conexao() as c:
         linhas = c.execute("""
             SELECT TUR.tur_id, TUR.tur_codigo, DIS.dis_codigo, DIS.dis_id,
-                   DIS.idper_periodo, PRO.pro_nome, PRO.pro_id
+                   DIS.idper_periodo, DIS.dis_eletiva, PRO.pro_nome, PRO.pro_id
             FROM tur_turma TUR
             JOIN dis_disciplina DIS ON DIS.dis_id = TUR.iddis_disciplina
             JOIN pro_professor PRO ON PRO.pro_id = TUR.idpro_professor
@@ -449,6 +449,7 @@ def turmas():
         "id": r["tur_id"], "cod": r["dis_codigo"], "turma": str(r["tur_codigo"]),
         "prof": r["pro_nome"], "prof_id": r["pro_id"], "dis_id": r["dis_id"],
         "periodo": r["idper_periodo"],
+        "eletiva": bool(r["dis_eletiva"]),
         "sala": ", ".join(salas.get(r["tur_id"], [])),
     } for r in linhas]
 
