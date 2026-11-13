@@ -106,15 +106,6 @@ def garantir_esquema():
                 c.execute("ALTER TABLE dis_disciplina ADD COLUMN dis_cargaHoraria INT NOT NULL DEFAULT 60")
             if "dis_eletiva" not in colunas_dis:
                 c.execute("ALTER TABLE dis_disciplina ADD COLUMN dis_eletiva INT NOT NULL DEFAULT 0")
-                
-        for dia, slot in HORARIOS_DO_FRONT:
-            if not c.execute("SELECT 1 FROM hor_horario WHERE hor_diaSemana = ? AND hor_slot = ?",
-                             (dia, slot)).fetchone():
-                novo = (c.execute("SELECT MAX(hor_id) FROM hor_horario").fetchone()[0] or 0) + 1
-                ini, fim = FAIXAS[SLOTS.index(slot)]
-                c.execute(
-                    "INSERT INTO hor_horario (hor_id, hor_diaSemana, hor_slot, hor_horaInicio, hor_horaFim) "
-                    "VALUES (?, ?, ?, ?, ?)", (novo, dia, slot, ini, fim))
 
         # Tabela de restrições.
         if "res_restricao" not in existentes:
@@ -922,6 +913,10 @@ def excluir_professor(pro_id):
 
 #Cadastro de horários.
 
+TURNO_INICIO_MIN = 7 * 60 + 10   # 07:10 (430 min)
+TURNO_FIM_MIN = 13 * 60          # 13:00 (780 min)
+DURACAO_AULA_MIN = 50            # 50 minutos por aula
+
 def _hora_minutos(valor):
     texto = str(valor or "").strip()
     if len(texto) != 5 or texto[2] != ":":
@@ -935,13 +930,24 @@ def _hora_minutos(valor):
     return hora * 60 + minuto
 
 
-def validar_faixa_horario(inicio, fim, existentes):
+def validar_faixa_horario(inicio, fim=None, existentes=()):
     inicio_min = _hora_minutos(inicio)
-    fim_min = _hora_minutos(fim)
-    if inicio_min is None or fim_min is None:
-        return "Informe os horários no formato HH:MM."
-    if fim_min <= inicio_min:
-        return "A hora de término deve ser posterior à hora de início."
+    if inicio_min is None:
+        return "Informe a hora de início no formato HH:MM."
+
+    if fim is None:
+        fim_min = inicio_min + DURACAO_AULA_MIN
+    else:
+        fim_min = _hora_minutos(fim)
+        if fim_min is None:
+            return "Informe os horários no formato HH:MM."
+        if fim_min != inicio_min + DURACAO_AULA_MIN:
+            return "A hora de término deve ser exatamente 50 minutos após a hora de início."
+
+    #A faixa deve estar entre 07:10 e 13:00 (início entre 07:10 e 12:10).
+    if inicio_min < TURNO_INICIO_MIN or fim_min > TURNO_FIM_MIN:
+        return "A faixa de horário deve estar integralmente entre 07:10 e 13:00 (hora de início entre 07:10 e 12:10)."
+
     for antigo_inicio, antigo_fim in existentes:
         if isinstance(antigo_inicio, int) and antigo_inicio >= 100:
             antigo_inicio = (antigo_inicio // 100) * 60 + antigo_inicio % 100
@@ -980,15 +986,15 @@ def buscar_horario(hor_id):
         }
     return None
 
-def criar_horario(hora_inicio, hora_fim):
+def criar_horario(hora_inicio, hora_fim=None):
     inicio = _hora_minutos(hora_inicio)
-    fim = _hora_minutos(hora_fim)
     with conexao() as c:
         existentes = [(r[0], r[1]) for r in c.execute(
             "SELECT hor_horaInicio, hor_horaFim FROM hor_horario GROUP BY hor_horaInicio, hor_horaFim").fetchall()]
         erro = validar_faixa_horario(hora_inicio, hora_fim, existentes)
         if erro:
             return erro
+        fim = inicio + DURACAO_AULA_MIN
         ultimo_slot = c.execute("SELECT MAX(hor_slot) FROM hor_horario").fetchone()[0]
         slot = chr(ord(ultimo_slot) + 1) if ultimo_slot else "A"
         if slot > "Z":
@@ -1001,7 +1007,7 @@ def criar_horario(hora_inicio, hora_fim):
     _mapa_horarios.cache_clear()
     return None
 
-def atualizar_horario(hor_id, hora_inicio, hora_fim):
+def atualizar_horario(hor_id, hora_inicio, hora_fim=None):
     with conexao() as c:
         atual = c.execute("SELECT hor_horaInicio, hor_horaFim FROM hor_horario WHERE hor_id = ?", (hor_id,)).fetchone()
         if not atual:
@@ -1013,7 +1019,8 @@ def atualizar_horario(hor_id, hora_inicio, hora_fim):
         erro = validar_faixa_horario(hora_inicio, hora_fim, outros)
         if erro:
             return erro
-        inicio, fim = _hora_minutos(hora_inicio), _hora_minutos(hora_fim)
+        inicio = _hora_minutos(hora_inicio)
+        fim = inicio + DURACAO_AULA_MIN
         c.execute("UPDATE hor_horario SET hor_horaInicio = ?, hor_horaFim = ? WHERE hor_horaInicio = ? AND hor_horaFim = ?", (inicio // 60 * 100 + inicio % 60, fim // 60 * 100 + fim % 60, atual[0], atual[1]))
     _mapa_horarios.cache_clear()
     return None
@@ -1050,39 +1057,33 @@ def excluir_horario(hor_id):
         if em_uso > 0:
             return f"Não é possível excluir: o horário possui {em_uso} aula(s) alocada(s). Remova ou transfira essas aulas antes.", None
 
-        #Contabiliza restrições e bloqueios vinculados antes da exclusão.
-        res_removidas = c.execute(
+        #Verifica restrições de professores e bloqueios de período vinculados à faixa.
+        res_vinculadas = c.execute(
             f"SELECT COUNT(*) FROM res_restricao WHERE idhor_horario IN ({placeholders})",
             ids_horarios
         ).fetchone()[0]
 
-        blq_removidos = c.execute(
+        blq_vinculados = c.execute(
             f"SELECT COUNT(*) FROM blq_bloqueio WHERE idhor_horario IN ({placeholders})",
             ids_horarios
         ).fetchone()[0]
 
-        #Exclui restrições e bloqueios associados a esta faixa de horário.
-        c.execute(f"DELETE FROM res_restricao WHERE idhor_horario IN ({placeholders})", ids_horarios)
-        c.execute(f"DELETE FROM blq_bloqueio WHERE idhor_horario IN ({placeholders})", ids_horarios)
+        if res_vinculadas > 0 or blq_vinculados > 0:
+            detalhes = []
+            if res_vinculadas > 0:
+                detalhes.append(f"{res_vinculadas} restrição(ões) de professor")
+            if blq_vinculados > 0:
+                detalhes.append(f"{blq_vinculados} bloqueio(s) de período")
+            return f"Não é possível excluir: o horário possui {' e '.join(detalhes)} vinculado(s). Remova esses vínculos antes de prosseguir.", None
 
-        #Exclui a faixa de horário em todos os dias.
+        #Exclui a faixa de horário em todos os dias apenas quando não há vínculos.
         c.execute(
             "DELETE FROM hor_horario WHERE hor_horaInicio = ? AND hor_horaFim = ?",
             (faixa["hor_horaInicio"], faixa["hor_horaFim"])
         )
 
     _mapa_horarios.cache_clear()
-
-    aviso = None
-    if res_removidas > 0 or blq_removidos > 0:
-        detalhes = []
-        if res_removidas > 0:
-            detalhes.append(f"{res_removidas} restrição(ões) de professor")
-        if blq_removidos > 0:
-            detalhes.append(f"{blq_removidos} bloqueio(s) de período")
-        aviso = f"Atenção: foram removidos em cascata {' e '.join(detalhes)} associados a esta faixa."
-
-    return None, aviso
+    return None, None
 
 # Perfis curriculares 
 

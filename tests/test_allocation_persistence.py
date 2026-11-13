@@ -169,9 +169,10 @@ class AllocationPersistenceTests(unittest.TestCase):
         import importlib
 
         gerador = importlib.import_module("services.gerador")
+        horarios_mock = [{"id": 1, "dia": 2, "ordem": 0, "inicio": 710, "fim": 800}]
         with patch.object(gerador, "construir_grafo") as build, \
                 patch.object(gerador, "ordenar_turmas", return_value=[10]), \
-                patch.object(gerador, "_obter_horarios_do_banco", return_value=[]), \
+                patch.object(gerador, "_obter_horarios_do_banco", return_value=horarios_mock), \
                 patch.object(gerador, "alocar_horarios", return_value=[_turma(10, [])]), \
                 patch.object(gerador, "alocar_salas") as allocate_rooms:
             graph = SimpleNamespace(vertice_turmas={10: _turma(10, [])})
@@ -188,10 +189,11 @@ class AllocationPersistenceTests(unittest.TestCase):
         import importlib
 
         gerador = importlib.import_module("services.gerador")
+        horarios_mock = [{"id": 1, "dia": 2, "ordem": 0, "inicio": 710, "fim": 800}]
         graph = SimpleNamespace(vertice_turmas={10: _turma(10, [1])})
         with patch.object(gerador, "construir_grafo", return_value=graph), \
                 patch.object(gerador, "ordenar_turmas", return_value=[10]), \
-                patch.object(gerador, "_obter_horarios_do_banco", return_value=[]), \
+                patch.object(gerador, "_obter_horarios_do_banco", return_value=horarios_mock), \
                 patch.object(gerador, "alocar_horarios", return_value=[]), \
                 patch.object(gerador, "alocar_salas", return_value=[]):
             result = gerador.gerar_grade("unused.db", 2, {}, {}, {})
