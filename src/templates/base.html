@@ -20,6 +20,18 @@
 {# ---------- 2) Barra de comandos ---------- #}
 {% block toolbar %}{% endblock %}
 
+{% if request.endpoint in ['listar_perfis', 'novo_perfil', 'visualizar_perfil', 'editar_perfil', 'excluir_perfil', 'carregar_perfil_turmas', 'aplicar_perfil_turmas'] %}
+<nav class="toolbar perfil-navegacao">
+  <a class="btn" href="{{ url_for('turmas') }}">Turmas</a>
+  <a class="btn" href="{{ url_for('listar_professores') }}">Professores</a>
+  <a class="btn" href="{{ url_for('listar_disciplinas') }}">Disciplinas</a>
+  <a class="btn ativo" href="{{ url_for('listar_perfis') }}">Perfis curriculares</a>
+  <a class="btn" href="{{ url_for('listar_horarios') }}">Horários</a>
+  <a class="btn" href="{{ url_for('restricoes') }}">Restrições</a>
+  <a class="btn" href="{{ url_for('salas') }}">Salas</a>
+</nav>
+{% endif %}
+
 {% with mensagens = get_flashed_messages(with_categories=true) %}
   {% if mensagens %}
     <div class="avisos">

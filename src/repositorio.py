@@ -123,11 +123,49 @@ def garantir_esquema():
                     dis_eletiva INT NOT NULL DEFAULT 0,
                     pro_id INT NOT NULL,
                     pro_nome TEXT NOT NULL,
-                    sal_id INT NOT NULL,
-                    sal_bloco TEXT NOT NULL,
-                    sal_numero INT NOT NULL,
+                    sal_id INT,
+                    sal_bloco TEXT,
+                    sal_numero INT,
                     idhor_horario INT NOT NULL
                 )""")
+        else:
+            # SQLite nao permite remover NOT NULL diretamente. A recriacao
+            # ocorre na mesma transacao e preserva todos os registros.
+            colunas_snapshot = {
+                r[1]: bool(r[3]) for r in c.execute("PRAGMA table_info(grd_snapshot_aula)")
+            }
+            if any(colunas_snapshot.get(nome, False) for nome in ("sal_id", "sal_bloco", "sal_numero")):
+                c.execute("ALTER TABLE grd_snapshot_aula RENAME TO grd_snapshot_aula_antiga")
+                c.execute("""
+                    CREATE TABLE grd_snapshot_aula (
+                        snp_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        idsem_semestre INT NOT NULL,
+                        tur_id_orig INT NOT NULL,
+                        tur_codigo TEXT NOT NULL,
+                        dis_id INT NOT NULL,
+                        dis_codigo TEXT NOT NULL,
+                        dis_nome TEXT NOT NULL,
+                        idper_periodo INT,
+                        dis_eletiva INT NOT NULL DEFAULT 0,
+                        pro_id INT NOT NULL,
+                        pro_nome TEXT NOT NULL,
+                        sal_id INT,
+                        sal_bloco TEXT,
+                        sal_numero INT,
+                        idhor_horario INT NOT NULL
+                    )""")
+                c.execute("""
+                    INSERT INTO grd_snapshot_aula (
+                        snp_id, idsem_semestre, tur_id_orig, tur_codigo,
+                        dis_id, dis_codigo, dis_nome, idper_periodo, dis_eletiva,
+                        pro_id, pro_nome, sal_id, sal_bloco, sal_numero, idhor_horario
+                    )
+                    SELECT snp_id, idsem_semestre, tur_id_orig, tur_codigo,
+                           dis_id, dis_codigo, dis_nome, idper_periodo, dis_eletiva,
+                           pro_id, pro_nome, sal_id, sal_bloco, sal_numero, idhor_horario
+                    FROM grd_snapshot_aula_antiga
+                """)
+                c.execute("DROP TABLE grd_snapshot_aula_antiga")
 
         if "grd_estado_semestre" not in existentes:
             c.execute("""
@@ -521,11 +559,11 @@ def turmas():
             ORDER BY TUR.tur_id""", (SEMESTRE_ID,)).fetchall()
         salas = {}
         for r in c.execute("""
-            SELECT DISTINCT ALO.idtur_turma, SAL.sal_bloco, SAL.sal_numero
+            SELECT DISTINCT ALO.idtur_turma, SAL.sal_bloco, SAL.sal_numero, ALO.idsal_sala
             FROM alo_alocacaoHorarioSala ALO
-            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            LEFT JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
             ORDER BY SAL.sal_bloco, SAL.sal_numero"""):
-            salas.setdefault(r[0], []).append("%s-%s" % (r[1], r[2]))
+            salas.setdefault(r[0], []).append("%s-%s" % (r[1], r[2]) if r[3] is not None else "Sem sala")
     return [{
         "id": r["tur_id"], "cod": r["dis_codigo"], "turma": str(r["tur_codigo"]),
         "prof": r["pro_nome"], "prof_id": r["pro_id"], "dis_id": r["dis_id"],
@@ -561,10 +599,10 @@ def salas_da_turma(turma_id):
         linhas = c.execute("""
             SELECT DISTINCT SAL.sal_id, SAL.sal_bloco, SAL.sal_numero
             FROM alo_alocacaoHorarioSala ALO
-            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            LEFT JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
             WHERE ALO.idtur_turma = ?
             ORDER BY SAL.sal_bloco, SAL.sal_numero""", (turma_id,)).fetchall()
-    return [{"id": r["sal_id"], "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"])}
+    return [{"id": r["sal_id"], "nome": "%s-%s" % (r["sal_bloco"], r["sal_numero"]) if r["sal_id"] is not None else "Sem sala"}
             for r in linhas]
 
 
@@ -575,7 +613,7 @@ def aulas():
                    SAL.sal_id, SAL.sal_bloco, SAL.sal_numero
             FROM alo_alocacaoHorarioSala ALO
             JOIN tur_turma TUR ON TUR.tur_id = ALO.idtur_turma
-            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            LEFT JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
             WHERE TUR.idsem_semestre = ?
             ORDER BY ALO.alo_id""", (SEMESTRE_ID,)).fetchall()
     resultado = []
@@ -587,7 +625,7 @@ def aulas():
             "id": r["alo_id"], "turma": r["idtur_turma"],
             "dia": pos[0], "h": pos[1], "hor_id": r["idhor_horario"],
             "sal_id": r["sal_id"],
-            "sala": "%s-%s" % (r["sal_bloco"], r["sal_numero"]),
+            "sala": "%s-%s" % (r["sal_bloco"], r["sal_numero"]) if r["sal_id"] is not None else "Sem sala",
         })
     return resultado
 
@@ -1387,7 +1425,7 @@ def aulas_exibicao():
         pos = dia_h(r["idhor_horario"])
         if pos is None:
             continue
-        sala_nome = "%s-%s" % (r["sal_bloco"], r["sal_numero"])
+        sala_nome = "%s-%s" % (r["sal_bloco"], r["sal_numero"]) if r["sal_id"] is not None else "Sem sala"
         turma_snap = {
             "id": r["tur_id_orig"],
             "cod": r["dis_codigo"],
@@ -1469,7 +1507,7 @@ def aplicar_perfil_turmas(perfil_id, turmas_config, confirmar=False):
             JOIN tur_turma TUR ON TUR.tur_id = ALO.idtur_turma
             JOIN dis_disciplina DIS ON DIS.dis_id = TUR.iddis_disciplina
             JOIN pro_professor PRO ON PRO.pro_id = TUR.idpro_professor
-            JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
+            LEFT JOIN sal_sala SAL ON SAL.sal_id = ALO.idsal_sala
             WHERE TUR.idsem_semestre = ?
             ORDER BY ALO.alo_id
         """, (SEMESTRE_ID,)).fetchall()

@@ -10,10 +10,11 @@ class PerfilCurricularTemplateTests(unittest.TestCase):
 
     def test_profile_templates_exist_and_expose_crud(self):
         listing = self.read("perfis.html")
+        base = self.read("base.html")
         create = self.read("novo_perfil.html")
         edit = self.read("editar_perfil.html")
         view = self.read("visualizar_perfil.html")
-        self.assertIn("listar_perfis", listing)
+        self.assertIn("listar_perfis", base)
         self.assertIn("visualizar_perfil", listing)
         self.assertIn("editar_perfil", listing)
         self.assertIn("excluir_perfil", listing)
