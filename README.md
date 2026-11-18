@@ -20,8 +20,8 @@ Virtualenv / venv: Módulo para isolamento de ambiente (recomendado)
 Guia Passo-a-Passo de Instalação e Execução
 Siga os passos abaixo no seu terminal para clonar o projeto, configurar as dependências, popular o banco de dados e iniciar o servidor em ambiente local.
 1. Clonar o repositório
-git clone https://github.com/usuario/sistema-grade-horaria.git
-cd sistema-grade-horaria
+git clone https://github.com/Marllon-Kauan/Projeto-Teoria-dos-Grafos.git
+cd Projeto-Teoria-dos-Grafos
 2. Criar e ativar o ambiente virtual (venv)
 no Linux / macOS:
 python3 -m venv venv
@@ -33,39 +33,27 @@ python -m venv venv
 pip install -r requirements.txt
 4. Inicializar e popular o banco de dados
 Execute o script de setup para criar o banco de dados SQLite (banco_projeto.db) e carregar os dados iniciais de salas, professores, períodos e disciplinas:
+cd src
 python setup_db.py
 5. Iniciar o servidor local
-Inicie a aplicação web via Flask:
+Inicie a aplicação web via Flask (ainda dentro da pasta src):
 python app.py
 Acesse a aplicação no seu navegador através do endereço: http://127.0.0.1:5000
-Configuração de Variáveis de Ambiente
-Crie um arquivo .env na raiz do projeto com base no modelo do arquivo .env.example. Este arquivo define as configurações de execução do Flask e segredos da aplicação.
-Exemplo prático de .env.example:
-# Configuração da Aplicação Flask
-FLASK_APP=app.py
-FLASK_ENV=development
-FLASK_DEBUG=1
-
-# Chave Secreta para Sessão do Flask (Trocar em ambiente de produção)
-SECRET_KEY=chave-secreta-de-desenvolvimento-trocar-em-producao
-
-# Configuração do Servidor Local
-PORT=5000
-HOST=127.0.0.1
-
-# Caminho do Banco de Dados SQLite
-DATABASE_PATH=banco_projeto.db
-Descrição das Chaves:
-FLASK_APP: Especifica o ponto de entrada principal da aplicação Flask (app.py).
-FLASK_ENV: Define o modo de execução da aplicação (development para desenvolvimento local ou production).
-FLASK_DEBUG: Habilita o modo de depuração com recarregamento automático em caso de alterações no código (1 para ligado, 0 para desligado).
-SECRET_KEY: Chave criptográfica usada pelo Flask para assinar cookies e proteger a sessão do usuário.
-PORT e HOST: Definem a porta de escuta e o endereço de rede da aplicação local.
-DATABASE_PATH: Especifica o arquivo de banco de dados SQLite utilizado pela aplicação.
+Configuração
+A aplicação não lê arquivo .env. As configurações ficam no código:
+SECRET_KEY: definida em src/app.py (trocar antes de colocar em produção).
+Banco de dados: src/banco_projeto.db, definido em DB_PATH no src/repositorio.py.
+Semestre ativo: SEMESTRE_ID no src/repositorio.py (usado também pelo verificar_regras.py).
 Execução de Testes e Licença
 Execução de Testes e Validação de Regras
 A aplicação conta com uma suíte de verificação automatizada para validar a integridade da grade horária gerada e garantir que nenhuma regra do algoritmo de grafos foi violada (ex: sobreposição de horários do mesmo professor, choque de salas ou estouro do limite de aulas consecutivas).
-Para rodar a verificação de regras no banco de dados após gerar a grade:
+Testes automatizados (pytest)
+Na raiz do projeto, com o ambiente virtual ativo e o banco já criado (passo 4):
+pip install pytest
+python -m pytest -q
+Os testes de tests/test_qa_grade.py usam um banco temporário e não alteram o banco_projeto.db.
+
+Para rodar a verificação de regras no banco de dados após gerar a grade (dentro da pasta src):
 # Executa a verificação utilizando o limite padrão de 2 aulas seguidas
 python verificar_regras.py
 
@@ -75,7 +63,8 @@ O script avaliará as seguintes restrições:
 Conflitos de professores no mesmo horário.
 Conflitos de turmas do mesmo período no mesmo horário.
 Alocação dupla da mesma sala.
-Respeito às restrições cadastrais de professores e horários bloqueados.
+Respeito às restrições cadastrais de professores e aos horários bloqueados de cada período (eletivas não sofrem bloqueio).
+Limites de aulas seguidas e de aulas por dia cadastrados para cada professor.
 Cumprimento exato da carga horária semanal.
 
 
