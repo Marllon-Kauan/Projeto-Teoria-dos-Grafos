@@ -229,8 +229,9 @@ def gerar():
         repo.concluir_geracao_grade()
         flash("Grade gerada com sucesso: %d aulas alocadas." % len(repo.aulas()), "ok")
     elif resultado.get("parcial"):
-        repo.concluir_geracao_grade()
-        flash("Grade gerada parcialmente. Não foi possível alocar: " + "; ".join(resultado["turmas"]), "erro")
+        repo.marcar_grade_desatualizada()
+        flash("Não foi possível gerar a nova grade (a anterior foi mantida). Não foi possível alocar: "
+              + "; ".join(resultado["turmas"]), "erro")
     else:
         flash("Erro ao gerar a grade.", "erro")
 
