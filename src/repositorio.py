@@ -1398,6 +1398,16 @@ def concluir_geracao_grade():
             ON CONFLICT(idsem_semestre) DO UPDATE SET config_pendente = 0
         """, (SEMESTRE_ID,))
 
+#Marca a grade exibida como desatualizada (ex.: a ultima geracao falhou e nada foi salvo).
+def marcar_grade_desatualizada():
+    with conexao() as c:
+        c.execute("""
+            INSERT INTO grd_estado_semestre (idsem_semestre, config_pendente)
+            VALUES (?, 1)
+            ON CONFLICT(idsem_semestre) DO UPDATE SET config_pendente = 1
+        """, (SEMESTRE_ID,))
+
+
 #Retorna as aulas para exibicao/exportacao da grade.
 def aulas_exibicao():
     atuais = aulas()
