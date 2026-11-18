@@ -45,6 +45,16 @@ def client(tmp_path, monkeypatch):
     return appmod.app.test_client()
 
 
+def verificador():
+    """Roda o src/verificar_regras.py no banco de teste e devolve os ERROS."""
+    import contextlib
+    import io
+    import verificar_regras
+    with contextlib.redirect_stdout(io.StringIO()):
+        erros, _ = verificar_regras.main(2, db_path=repo.DB_PATH)
+    return erros
+
+
 def gerar(client):
     return client.post("/gerar", follow_redirects=True).get_data(as_text=True)
 
@@ -197,6 +207,7 @@ def test_geracao_com_restricoes_aleatorias(client, seed):
             "periodo": per, "bloq": [str(h) for h in rnd.sample(hor_ids, 8)]})
     gerar(client)
     assert violacoes() == []
+    assert verificador() == []
 
 
 def test_mover_aula_nunca_aceita_movimento_invalido(client):
@@ -227,3 +238,41 @@ def test_geracao_parcial_nao_apresenta_grade_antiga_como_atual(client):
     assert "Não foi possível gerar a nova grade" in gerar(client)
     # Ou a grade é marcada como desatualizada, ou a grade exibida respeita as regras atuais.
     assert repo.grade_esta_desatualizada() or violacoes() == []
+
+
+# ------------------------------------------------- verificar_regras.py
+
+def test_verificador_aprova_grade_gerada(client):
+    gerar(client)
+    assert verificador() == []
+
+
+def test_verificador_nao_aplica_bloqueio_de_um_periodo_em_outro(client):
+    gerar(client)
+    turmas = {t["id"]: t for t in repo.turmas()}
+    usados_p1 = {a["hor_id"] for a in repo.aulas() if turmas[a["turma"]]["periodo"] == 1}
+    hor = next(a["hor_id"] for a in repo.aulas()
+               if turmas[a["turma"]]["periodo"] == 2 and a["hor_id"] not in usados_p1)
+    client.post("/restricoes/bloqueios", data={"periodo": 1, "bloq": [str(hor)]})
+    assert verificador() == []
+
+
+def test_verificador_detecta_aula_em_horario_bloqueado(client):
+    gerar(client)
+    turmas = {t["id"]: t for t in repo.turmas()}
+    aula = next(a for a in repo.aulas()
+                if turmas[a["turma"]]["periodo"] == 1 and not turmas[a["turma"]].get("eletiva"))
+    client.post("/restricoes/bloqueios", data={"periodo": 1, "bloq": [str(aula["hor_id"])]})
+    assert any(e.startswith("[bloqueio]") for e in verificador())
+
+
+def test_verificador_detecta_limite_diario_estourado(client):
+    gerar(client)
+    turmas = {t["id"]: t for t in repo.turmas()}
+    por_prof_dia = defaultdict(int)
+    for a in repo.aulas():
+        por_prof_dia[(turmas[a["turma"]]["prof_id"], a["dia"])] += 1
+    (prof, _dia), qtd = max(por_prof_dia.items(), key=lambda kv: kv[1])
+    # cadastra um limite diário menor do que o professor já tem na grade salva
+    repo.salvar_preferencia(prof, 3, qtd - 1)
+    assert any(e.startswith("[diarias]") for e in verificador())
